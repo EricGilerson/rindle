@@ -40,6 +40,8 @@ add_library(rivulet STATIC
         include/rivulet/engine.hpp
         include/rivulet/types.hpp
         src/engine.cpp
+        include/rivulet/scaler.hpp
+        src/scaler.cpp
 )
 target_include_directories(rivulet PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
