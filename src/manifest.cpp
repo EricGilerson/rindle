@@ -1,0 +1,230 @@
+//
+// Created by Eric Gilerson on 10/7/25.
+//
+/*==============================================================================
+  File: src/manifest.cpp
+
+  Purpose:
+    JSON serialization/deserialization for the dataset manifest.
+
+  Responsibilities:
+    - Emit manifest.json capturing the full on-disk contract.
+    - Read and validate an existing manifest when needed.
+
+  Notes:
+    - Keep fields stable; add versioning if you evolve the contract.
+==============================================================================*/
+
+#include "rivulet/manifest.hpp"
+#include <nlohmann/json.hpp>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
+
+namespace rivulet {
+
+  using json = nlohmann::json;
+
+  Manifest::Manifest(const DatasetConfig &config, const Catalog &catalog) {
+    populate(config, catalog);
+  }
+
+  void Manifest::populate(const DatasetConfig &config, const Catalog &catalog) {
+    content_.seq_length = config.seq_length;
+    content_.future_horizon = config.future_horizon;
+    content_.feature_columns = config.feature_columns;
+    content_.target_column = config.target_column;
+    content_.time_mode = config.time_mode;
+    content_.row_major = config.row_major;
+    content_.total_tickers = catalog.work_items().size();
+    content_.total_windows = catalog.total_windows_created();
+    content_.total_input_rows = catalog.total_rows_processed() + catalog.total_rows_dropped();
+    content_.total_dropped_rows = catalog.total_rows_dropped();
+    content_.ticker_stats = catalog.all_stats();
+    content_.combined_features_path = catalog.combined_output_dir() / "features.bin";
+    content_.combined_targets_path = catalog.combined_output_dir() / "targets.bin";
+    content_.combined_index_path = catalog.combined_output_dir() / "index.bin";
+  }
+
+  bool Manifest::write_to_file(const std::filesystem::path &path, std::string &error_msg) const {
+    try {
+      // Generate current timestamp
+      auto now = std::chrono::system_clock::now();
+      auto now_time_t = std::chrono::system_clock::to_time_t(now);
+      std::ostringstream oss;
+      oss << std::put_time(std::gmtime(&now_time_t), "%Y-%m-%d %H:%M:%S UTC");
+      const_cast<Manifest*>(this)->content_.build_timestamp = oss.str();
+
+      // Open file for writing
+      std::ofstream file(path);
+      if (!file.is_open()) {
+        error_msg = "Failed to open file for writing: " + path.string();
+        return false;
+      }
+
+      // Write JSON with pretty formatting
+      file << to_json();
+
+      if (!file.good()) {
+        error_msg = "Error occurred while writing to file: " + path.string();
+        return false;
+      }
+
+      return true;
+    } catch (const std::exception &e) {
+      error_msg = std::string("Exception during write: ") + e.what();
+      return false;
+    }
+  }
+
+  Result<Manifest> Manifest::read_from_file(const std::filesystem::path &path) {
+    try {
+      std::ifstream file(path);
+      if (!file.is_open()) {
+        return {std::nullopt, Status::Error("Failed to open file for reading: " + path.string())};
+      }
+
+      // Read entire file into string
+      std::string json_str((std::istreambuf_iterator<char>(file)),
+                           std::istreambuf_iterator<char>());
+
+      if (json_str.empty()) {
+        return {std::nullopt, Status::Error("File is empty: " + path.string())};
+      }
+
+      std::string error_msg;
+      auto result = from_json(json_str, error_msg);
+
+      if (!result.has_value()) {
+        return {std::nullopt, Status::Error(error_msg)};
+      }
+
+      return {result.value(), Status::OK()};
+    } catch (const std::exception &e) {
+      return {std::nullopt, Status::Error(std::string("Exception during read: ") + e.what())};
+    }
+  }
+
+  std::string Manifest::to_json() const {
+    json j;
+
+    // Basic metadata
+    j["version"] = content_.version;
+
+    // Dataset configuration
+    j["seq_length"] = content_.seq_length;
+    j["future_horizon"] = content_.future_horizon;
+    j["feature_columns"] = content_.feature_columns;
+
+    if (content_.target_column.has_value()) {
+      j["target_column"] = content_.target_column.value();
+    } else {
+      j["target_column"] = nullptr;
+    }
+
+    // Serialize TimeMode enum
+    j["time_mode"] = (content_.time_mode == TimeMode::UTC_NS) ? "UTC_NS" : "ORDINAL";
+    j["row_major"] = content_.row_major;
+
+    // Statistics
+    j["total_tickers"] = content_.total_tickers;
+    j["total_windows"] = content_.total_windows;
+    j["total_input_rows"] = content_.total_input_rows;
+    j["total_dropped_rows"] = content_.total_dropped_rows;
+
+    // Per-ticker stats
+    json ticker_stats_array = json::array();
+    for (const auto& stats : content_.ticker_stats) {
+      json stats_obj;
+      stats_obj["ticker"] = stats.ticker;
+      stats_obj["input_rows"] = stats.input_rows;
+      stats_obj["rows_dropped"] = stats.rows_dropped;
+      stats_obj["windows_created"] = stats.windows_created;
+      stats_obj["was_sorted"] = stats.was_sorted;
+      ticker_stats_array.push_back(stats_obj);
+    }
+    j["ticker_stats"] = ticker_stats_array;
+
+    // Output paths
+    j["combined_features_path"] = content_.combined_features_path.string();
+    j["combined_targets_path"] = content_.combined_targets_path.string();
+    j["combined_index_path"] = content_.combined_index_path.string();
+
+    // Build metadata
+    j["build_timestamp"] = content_.build_timestamp;
+
+    return j.dump(4); // Pretty print with 4-space indent
+  }
+
+  std::optional<Manifest> Manifest::from_json(const std::string &json_str, std::string &error_msg) {
+    try {
+      json j = json::parse(json_str);
+
+      Manifest manifest;
+
+      // Basic metadata
+      manifest.content_.version = j.value("version", 1);
+
+      // Dataset configuration
+      manifest.content_.seq_length = j.at("seq_length").get<std::size_t>();
+      manifest.content_.future_horizon = j.at("future_horizon").get<std::size_t>();
+      manifest.content_.feature_columns = j.at("feature_columns").get<std::vector<std::string>>();
+
+      if (j.contains("target_column") && !j["target_column"].is_null()) {
+        manifest.content_.target_column = j["target_column"].get<std::string>();
+      } else {
+        manifest.content_.target_column = std::nullopt;
+      }
+
+      // Deserialize TimeMode enum
+      std::string time_mode_str = j.at("time_mode").get<std::string>();
+      manifest.content_.time_mode = (time_mode_str == "UTC_NS") ? TimeMode::UTC_NS : TimeMode::ORDINAL;
+
+      manifest.content_.row_major = j.at("row_major").get<bool>();
+
+      // Statistics
+      manifest.content_.total_tickers = j.at("total_tickers").get<std::size_t>();
+      manifest.content_.total_windows = j.at("total_windows").get<std::size_t>();
+      manifest.content_.total_input_rows = j.at("total_input_rows").get<std::size_t>();
+      manifest.content_.total_dropped_rows = j.at("total_dropped_rows").get<std::size_t>();
+
+      // Per-ticker stats
+      manifest.content_.ticker_stats.clear();
+      if (j.contains("ticker_stats") && j["ticker_stats"].is_array()) {
+        for (const auto& stats_json : j["ticker_stats"]) {
+          TickerStats stats;
+          stats.ticker = stats_json.at("ticker").get<std::string>();
+          stats.input_rows = stats_json.at("input_rows").get<std::size_t>();
+          stats.rows_dropped = stats_json.at("rows_dropped").get<std::size_t>();
+          stats.windows_created = stats_json.at("windows_created").get<std::size_t>();
+          stats.was_sorted = stats_json.at("was_sorted").get<bool>();
+          manifest.content_.ticker_stats.push_back(stats);
+        }
+      }
+
+      // Output paths
+      manifest.content_.combined_features_path = j.at("combined_features_path").get<std::string>();
+      manifest.content_.combined_targets_path = j.at("combined_targets_path").get<std::string>();
+      manifest.content_.combined_index_path = j.at("combined_index_path").get<std::string>();
+
+      // Build metadata
+      manifest.content_.build_timestamp = j.value("build_timestamp", "");
+
+      return manifest;
+
+    } catch (const json::parse_error &e) {
+      error_msg = std::string("JSON parse error: ") + e.what();
+      return std::nullopt;
+    } catch (const json::out_of_range &e) {
+      error_msg = std::string("Missing required JSON field: ") + e.what();
+      return std::nullopt;
+    } catch (const json::type_error &e) {
+      error_msg = std::string("JSON type error: ") + e.what();
+      return std::nullopt;
+    } catch (const std::exception &e) {
+      error_msg = std::string("Unexpected error: ") + e.what();
+      return std::nullopt;
+    }
+  }
+
+} // namespace rivulet

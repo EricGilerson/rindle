@@ -36,12 +36,24 @@ endif()
 
 # Library target
 add_library(rivulet STATIC
-        src/engine.cpp
-        include/rivulet/engine.hpp
         include/rivulet/types.hpp
-        src/engine.cpp
         include/rivulet/scaler.hpp
         src/scaler.cpp
+        src/table.cpp
+        include/rivulet/table.hpp
+        src/csv_io.cpp
+        include/rivulet/csv_io.hpp
+        src/manifest.cpp
+        include/rivulet/manifest.hpp
+        src/clean.cpp
+        include/rivulet/clean.hpp
+        src/window_maker.cpp
+        include/rivulet/window_maker.hpp
+        src/catalog.cpp
+        include/rivulet/catalog.hpp
+        src/driver.cpp
+        include/rivulet/driver.hpp
+        src/types.cpp
 )
 target_include_directories(rivulet PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -76,3 +88,15 @@ if(RIVULET_BUILD_TESTS)
     include(Catch)
     catch_discover_tests(rivulet_tests)
 endif()
+
+include(FetchContent)
+
+FetchContent_Declare(
+        nlohmann_json
+        GIT_REPOSITORY https://github.com/nlohmann/json.git
+        GIT_TAG v3.11.3  # or latest version
+)
+
+FetchContent_MakeAvailable(nlohmann_json)
+
+target_link_libraries(rivulet PRIVATE nlohmann_json::nlohmann_json)
