@@ -65,6 +65,8 @@ namespace rivulet {
         bool is_sorted_by_date() const;
         bool all_columns_same_length() const;
 
+        bool load_from_csv(const std::filesystem::path & path, TimeMode mode, const std::string & string);
+
     private:
         std::unordered_map<std::string, std::vector<double>> columns_;
         std::optional<std::vector<Timestamp>> dates_;

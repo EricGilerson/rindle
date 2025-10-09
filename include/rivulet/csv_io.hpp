@@ -83,19 +83,18 @@ namespace rivulet {
         );
 
         static bool append_to_combined_targets(
-            const std::filesystem::path& path,
-            const std::vector<std::vector<double>>& y,
-            const std::string& target_name,
+            const std::filesystem::path &path,
+            const std::vector<std::vector<double>> &y,
+            const std::string &target_name,
             bool write_header,
-            std::string& error_msg
+            std::string &error_msg
         );
 
         static bool append_to_combined_index(
-            const std::filesystem::path& path,
-            const std::vector<WindowIndex>& indices,
-            bool has_targets,
+            const std::filesystem::path &path,
+            const std::vector<WindowIndex> &indices,
             bool write_header,
-            std::string& error_msg
+            std::string &error_msg
         );
 
         // Utility

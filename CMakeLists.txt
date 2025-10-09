@@ -54,6 +54,8 @@ add_library(rivulet STATIC
         src/driver.cpp
         include/rivulet/driver.hpp
         src/types.cpp
+        include/rivulet/window_manifest.hpp
+        src/window_manifest.cpp
 )
 target_include_directories(rivulet PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

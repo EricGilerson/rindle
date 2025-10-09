@@ -1,84 +1,142 @@
-//
-// Created by Eric Gilerson on 10/7/25.
-//
-/*==============================================================================
-  File: include/rivulet/window_maker.hpp
-
-  Purpose:
-    Sliding-window constructor that produces leakage-free windows (X) and aligned
-    future targets (y) from a clean, ordered Table.
-
-  Responsibilities:
-    - Given features[], seq_length L, and horizon H, emit:
-        X: flattened (time-major) windows of shape [n_rows, L*F]
-        y: target rows aligned to the window end, length H (optional)
-        index: window_start, window_end, target_end for each row
-    - Skip any window that contains NaN/Inf after cleaning.
-
-  Notes:
-    - Horizon is in rows, not minutes. When Date exists, timestamps are still
-      preserved for audit via index output.
-==============================================================================*/
-
-#ifndef RIVULET_WINDOW_MAKER_HPP
-#define RIVULET_WINDOW_MAKER_HPP
-
+// window_maker.hpp
 #pragma once
-#include "types.hpp"
-#include "table.hpp"
-#include "csv_io.hpp"
-#include <vector>
+
+#include <cstdint>
+#include <functional>
+#include <optional>
 #include <string>
+#include <string_view>
+#include <vector>
+
+#include "window_manifest.hpp"
 
 namespace rivulet {
 
-    struct WindowOutput {
-        std::vector<std::vector<double>> X;  // [n_windows, L*F] or [n_windows, F*L]
-        std::vector<std::vector<double>> y;  // [n_windows, H] (optional)
-        std::vector<WindowIndex> indices;
-        std::size_t windows_created = 0;
-        std::size_t windows_skipped = 0;
-    };
+/**
+ * Configuration for generating windows from a base time series store.
+ * The base store is assumed to be keyed by (ticker, timestamp_ns).
+ */
+struct WindowSpec {
+  // Universe selection
+  std::vector<std::string> tickers;           // empty means all available
+  std::optional<std::int64_t> start_ns;       // inclusive; empty means earliest
+  std::optional<std::int64_t> end_ns;         // exclusive; empty means latest
 
-    class WindowMaker {
-    public:
-        explicit WindowMaker(const DatasetConfig& config);
+  // Window geometry
+  std::int64_t window_length_ns = 0;          // length of each input window
+  std::int64_t step_ns = 0;                   // stride between consecutive windows
+  std::int64_t horizon_ns = 0;                // prediction horizon for targets
 
-        // Create windows from a cleaned table
-        Result<WindowOutput> make_windows(
-            const Table& table,
-            const std::string& ticker,
-            std::string& error_msg
-        ) const;
+  // Target control
+  bool with_targets = true;                   // set false for unlabeled windows
 
-    private:
-        const DatasetConfig& config_;
+  // Data quality guards
+  std::int64_t min_history_ns = 0;            // require at least this much history before window_start
+  std::int64_t max_gap_ns = 0;                // largest allowed gap inside a window; 0 disables the check
 
-        // Flatten a single window (time-major or row-major)
-        std::vector<double> flatten_window(
-            const Table& table,
-            const std::vector<std::string>& feature_cols,
-            std::size_t start_row,
-            std::size_t length
-        ) const;
+  // Session and calendar controls (optional, implement as needed)
+  bool exclude_weekends = false;
+  bool align_to_session = false;
+  std::string session_calendar;               // e.g., "XNYS"
+};
 
-        // Extract target values
-        std::vector<double> extract_targets(
-            const Table& table,
-            const std::string& target_col,
-            std::size_t start_row,
-            std::size_t length
-        ) const;
+/**
+ * Single-ticker window specification.
+ * Used internally to process one ticker at a time.
+ */
+struct SingleTickerWindowSpec {
+  std::string ticker;
+  std::optional<std::int64_t> start_ns;
+  std::optional<std::int64_t> end_ns;
 
-        // Check if window contains any invalid values
-        bool window_is_valid(
-            const Table& table,
-            const std::vector<std::string>& cols,
-            std::size_t start,
-            std::size_t length
-        ) const;
-    };
+  std::int64_t window_length_ns = 0;
+  std::int64_t step_ns = 0;
+  std::int64_t horizon_ns = 0;
 
-} // namespace rivulet
+  bool with_targets = true;
+  std::int64_t min_history_ns = 0;
+  std::int64_t max_gap_ns = 0;
 
-#endif //RIVULET_WINDOW_MAKER_HPP
+  bool exclude_weekends = false;
+  bool align_to_session = false;
+  std::string session_calendar;
+};
+
+/**
+ * Generate windows for a SINGLE ticker.
+ * This is the core window generation logic for one time series.
+ * Returns an empty vector on error and fills error_msg.
+ */
+std::vector<WindowRow> make_windows_for_ticker(const SingleTickerWindowSpec& spec,
+                                               std::string* error_msg);
+
+/**
+ * Streaming variant for a single ticker.
+ * Calls sink(row) for every generated window and stops early if sink returns false.
+ * Returns true on success and fills error_msg on failure.
+ */
+using WindowSink = std::function<bool(const WindowRow&)>;
+
+bool make_windows_for_ticker_streaming(const SingleTickerWindowSpec& spec,
+                                       const WindowSink& sink,
+                                       std::string* error_msg);
+
+/**
+ * Generate windows for ALL tickers specified in the WindowSpec.
+ * This function:
+ * 1. Iterates over each ticker in spec.tickers (or all available if empty)
+ * 2. Calls make_windows_for_ticker for each one
+ * 3. Aggregates results into a single vector
+ *
+ * Suitable for moderate datasets and testing.
+ * Returns an empty vector on error and fills error_msg.
+ */
+std::vector<WindowRow> make_windows(const WindowSpec& spec,
+                                    std::string* error_msg);
+
+/**
+ * Streaming variant for multiple tickers.
+ * Processes tickers sequentially, calling sink for each window generated.
+ * This is memory-efficient for large universes.
+ * Returns true on success and fills error_msg on failure.
+ */
+bool make_windows_streaming(const WindowSpec& spec,
+                            const WindowSink& sink,
+                            std::string* error_msg);
+
+/**
+ * Parallel variant for multiple tickers.
+ * Processes tickers in parallel and merges results.
+ * Windows are NOT guaranteed to be in any particular order.
+ * Use this for large universes where order doesn't matter.
+ */
+std::vector<WindowRow> make_windows_parallel(const WindowSpec& spec,
+                                             std::size_t num_threads,
+                                             std::string* error_msg);
+
+/**
+ * Convenience helpers that connect window generation to manifest persistence.
+ * These route to CSV or Parquet writers without exposing storage details to callers.
+ */
+
+// Build all windows then write a complete manifest file at once.
+bool build_and_write_manifest_csv(const WindowSpec& spec,
+                                  const std::string& manifest_csv_path,
+                                  const WindowsManifestMeta& meta,
+                                  std::string* error_msg);
+
+// Stream windows and append each row to an existing CSV manifest.
+// More efficient for large datasets as it doesn't hold all windows in memory.
+bool build_and_append_manifest_csv(const WindowSpec& spec,
+                                   const std::string& manifest_csv_path,
+                                   const WindowsManifestMeta& meta,
+                                   std::string* error_msg);
+
+// Build windows for a single ticker and append to manifest.
+// Useful for incremental updates when adding new tickers.
+bool build_and_append_manifest_csv_for_ticker(const SingleTickerWindowSpec& spec,
+                                              const std::string& manifest_csv_path,
+                                              const WindowsManifestMeta& meta,
+                                              std::string* error_msg);
+
+}  // namespace rivulet
