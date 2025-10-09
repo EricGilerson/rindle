@@ -25,77 +25,42 @@
 
 #pragma once
 #include "types.hpp"
-#include "table.hpp"
 #include <filesystem>
 #include <string>
 #include <vector>
 
-namespace rivulet {
+#include "window_manifest.hpp"
 
-    // Index entry for one window
-    struct WindowIndex {
-        std::string ticker;
-        std::size_t window_start;    // row index in original data
-        std::size_t window_end;      // row index (exclusive)
-        std::optional<std::size_t> target_end;  // when target exists
-        std::optional<Timestamp> start_time;
-        std::optional<Timestamp> end_time;
-    };
+namespace rivulet {
 
     class CsvIO {
     public:
-        // Read a CSV into a Table
-        static Result<Table> read_csv(
-            const std::filesystem::path& path,
-            TimeMode mode,
-            std::string& error_msg
-        );
 
         // Write per-ticker outputs
         static bool write_features(
             const std::filesystem::path& path,
             const std::vector<std::vector<double>>& X,
             const std::vector<std::string>& feature_names,
-            std::string& error_msg
+            std::string& error_msg,
+            bool append
         );
 
         static bool write_targets(
             const std::filesystem::path& path,
             const std::vector<std::vector<double>>& y,
             const std::string& target_name,
-            std::string& error_msg
+            std::string& error_msg,
+            bool append
         );
 
         static bool write_index(
             const std::filesystem::path& path,
-            const std::vector<WindowIndex>& indices,
+            const std::vector<WindowRow>& indices,
             bool has_targets,
-            std::string& error_msg
+            std::string& error_msg,
+            bool append
         );
 
-        // Append to combined outputs
-        static bool append_to_combined_features(
-            const std::filesystem::path& path,
-            const std::vector<std::vector<double>>& X,
-            const std::vector<std::string>& feature_names,
-            bool write_header,
-            std::string& error_msg
-        );
-
-        static bool append_to_combined_targets(
-            const std::filesystem::path &path,
-            const std::vector<std::vector<double>> &y,
-            const std::string &target_name,
-            bool write_header,
-            std::string &error_msg
-        );
-
-        static bool append_to_combined_index(
-            const std::filesystem::path &path,
-            const std::vector<WindowIndex> &indices,
-            bool write_header,
-            std::string &error_msg
-        );
 
         // Utility
         static bool ensure_directory_exists(const std::filesystem::path& dir);

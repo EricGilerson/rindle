@@ -41,9 +41,9 @@ namespace rivulet {
     content_.total_input_rows = catalog.total_rows_processed() + catalog.total_rows_dropped();
     content_.total_dropped_rows = catalog.total_rows_dropped();
     content_.ticker_stats = catalog.all_stats();
-    content_.combined_features_path = catalog.combined_output_dir() / "features.bin";
-    content_.combined_targets_path = catalog.combined_output_dir() / "targets.bin";
-    content_.combined_index_path = catalog.combined_output_dir() / "index.bin";
+    content_.output_dir = config.output_dir;
+    content_.build_ticker_index();
+
   }
 
   bool Manifest::write_to_file(const std::filesystem::path &path, std::string &error_msg) const {
@@ -144,11 +144,7 @@ namespace rivulet {
       ticker_stats_array.push_back(stats_obj);
     }
     j["ticker_stats"] = ticker_stats_array;
-
-    // Output paths
-    j["combined_features_path"] = content_.combined_features_path.string();
-    j["combined_targets_path"] = content_.combined_targets_path.string();
-    j["combined_index_path"] = content_.combined_index_path.string();
+    j["output_dir"] = content_.output_dir.string();
 
     // Build metadata
     j["build_timestamp"] = content_.build_timestamp;
@@ -187,7 +183,7 @@ namespace rivulet {
       manifest.content_.total_windows = j.at("total_windows").get<std::size_t>();
       manifest.content_.total_input_rows = j.at("total_input_rows").get<std::size_t>();
       manifest.content_.total_dropped_rows = j.at("total_dropped_rows").get<std::size_t>();
-
+      manifest.content_.output_dir = j.at("output_dir").get<std::string>();
       // Per-ticker stats
       manifest.content_.ticker_stats.clear();
       if (j.contains("ticker_stats") && j["ticker_stats"].is_array()) {
@@ -202,10 +198,7 @@ namespace rivulet {
         }
       }
 
-      // Output paths
-      manifest.content_.combined_features_path = j.at("combined_features_path").get<std::string>();
-      manifest.content_.combined_targets_path = j.at("combined_targets_path").get<std::string>();
-      manifest.content_.combined_index_path = j.at("combined_index_path").get<std::string>();
+      manifest.content_.build_ticker_index();
 
       // Build metadata
       manifest.content_.build_timestamp = j.value("build_timestamp", "");

@@ -8,6 +8,7 @@
 #include <string_view>
 #include <vector>
 
+#include "types.hpp"
 #include "window_manifest.hpp"
 
 namespace rivulet {
@@ -46,8 +47,6 @@ struct WindowSpec {
  */
 struct SingleTickerWindowSpec {
   std::string ticker;
-  std::optional<std::int64_t> start_ns;
-  std::optional<std::int64_t> end_ns;
 
   std::int64_t window_length_ns = 0;
   std::int64_t step_ns = 0;
@@ -56,10 +55,6 @@ struct SingleTickerWindowSpec {
   bool with_targets = true;
   std::int64_t min_history_ns = 0;
   std::int64_t max_gap_ns = 0;
-
-  bool exclude_weekends = false;
-  bool align_to_session = false;
-  std::string session_calendar;
 };
 
 /**
@@ -68,7 +63,8 @@ struct SingleTickerWindowSpec {
  * Returns an empty vector on error and fills error_msg.
  */
 std::vector<WindowRow> make_windows_for_ticker(const SingleTickerWindowSpec& spec,
-                                               std::string* error_msg);
+                                               std::string* error_msg,
+                                               const TickerStats *ticker_stats);
 
 /**
  * Streaming variant for a single ticker.
@@ -122,21 +118,18 @@ std::vector<WindowRow> make_windows_parallel(const WindowSpec& spec,
 // Build all windows then write a complete manifest file at once.
 bool build_and_write_manifest_csv(const WindowSpec& spec,
                                   const std::string& manifest_csv_path,
-                                  const WindowsManifestMeta& meta,
                                   std::string* error_msg);
 
 // Stream windows and append each row to an existing CSV manifest.
 // More efficient for large datasets as it doesn't hold all windows in memory.
 bool build_and_append_manifest_csv(const WindowSpec& spec,
                                    const std::string& manifest_csv_path,
-                                   const WindowsManifestMeta& meta,
                                    std::string* error_msg);
 
 // Build windows for a single ticker and append to manifest.
 // Useful for incremental updates when adding new tickers.
 bool build_and_append_manifest_csv_for_ticker(const SingleTickerWindowSpec& spec,
                                               const std::string& manifest_csv_path,
-                                              const WindowsManifestMeta& meta,
                                               std::string* error_msg);
 
 }  // namespace rivulet

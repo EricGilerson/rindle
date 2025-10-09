@@ -39,8 +39,6 @@ add_library(rivulet STATIC
         include/rivulet/types.hpp
         include/rivulet/scaler.hpp
         src/scaler.cpp
-        src/table.cpp
-        include/rivulet/table.hpp
         src/csv_io.cpp
         include/rivulet/csv_io.hpp
         src/manifest.cpp

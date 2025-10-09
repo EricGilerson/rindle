@@ -55,6 +55,7 @@ namespace rivulet {
     std::filesystem::path Catalog::output_dir_for_ticker(const std::string& ticker) const {
         return config_.output_dir / ticker;
     }
+    //should not be used
     std::filesystem::path Catalog::combined_output_dir() const {
         return config_.output_dir / "combined";
     }
@@ -71,7 +72,7 @@ namespace rivulet {
     std::size_t Catalog::total_rows_processed() const {
         std::size_t total = 0;
         for (const auto& s : stats_) {
-            total += s.input_rows - s.rows_dropped;
+            total += s.processed_rows;
         }
         return total;
     }

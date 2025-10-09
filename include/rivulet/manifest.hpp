@@ -30,7 +30,7 @@
 #include "catalog.hpp"
 
 namespace rivulet {
-
+    using TickerMap = std::unordered_map<std::string, const TickerStats*>;
     struct ManifestContent {
         int version = 1;
 
@@ -50,12 +50,21 @@ namespace rivulet {
 
         // Per-ticker breakdown
         std::vector<TickerStats> ticker_stats;
+        std::unordered_map<std::string, std::size_t> ticker_index;
+        std::filesystem::path output_dir;
 
-        // Output paths
-        std::filesystem::path combined_features_path;
-        std::filesystem::path combined_targets_path;
-        std::filesystem::path combined_index_path;
-
+        void build_ticker_index() {
+            ticker_index.clear();
+            ticker_index.reserve(ticker_stats.size());
+            for (std::size_t i = 0; i < ticker_stats.size(); ++i) {
+                ticker_index.emplace(ticker_stats[i].ticker, i);
+            }
+        }
+        const TickerStats* find_stats(std::string_view name) const {
+            auto it = ticker_index.find(std::string(name));
+            if (it == ticker_index.end()) return nullptr;
+            return &ticker_stats[it->second];
+        }
         // Build metadata
         std::string build_timestamp;
     };
@@ -80,8 +89,13 @@ namespace rivulet {
         const ManifestContent& content() const { return content_; }
         ManifestContent& content_mut() { return content_; }
 
+        const TickerMap& ticker_map() const;
+
+
     private:
         ManifestContent content_;
+
+        mutable TickerMap ticker_map_cache_;
 
         std::string to_json() const;
         static std::optional<Manifest> from_json(const std::string &json_str, std::string &error_msg);

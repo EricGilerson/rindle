@@ -40,6 +40,7 @@ namespace rivulet {
         std::size_t total_dropped = 0;
     };
 
+    inline Manifest manifest;
     class Driver {
     public:
         explicit Driver(DatasetConfig config);
@@ -58,7 +59,6 @@ namespace rivulet {
         DatasetConfig config_;
         Catalog catalog_;
         Cleaner cleaner_;
-        WindowMaker window_maker_;
 
         // Write combined outputs header on first ticker
         bool init_combined_outputs(std::string& error_msg);

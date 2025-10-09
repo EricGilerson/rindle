@@ -15,24 +15,48 @@ namespace rivulet {
  * A row identifies a training example by ticker and time bounds,
  * and may optionally include a target timestamp and label.
  */
-struct WindowRow {
-  std::string ticker;
-  std::int64_t window_start_ns;
-  std::int64_t window_end_ns;
-  std::optional<std::int64_t> target_end_ns;  // empty when unlabeled
-  std::optional<double> y;                    // empty when unlabeled
-};
+    struct WindowRow {
+        std::string ticker;
+        std::int64_t window_start;
+        std::int64_t window_end;
+        std::optional<std::int64_t> target_start;
+        std::optional<std::int64_t> target_end;
 
-/**
- * Optional metadata to write alongside a manifest.
- * Useful for reproducibility and cache management.
- */
-struct WindowsManifestMeta {
-  std::string feature_spec_id;     // hash or name of the feature function
-  std::string raw_data_version;    // identifier for the raw/base data
-  std::int64_t created_at_ns = 0;  // UTC time of creation
-  std::string generator_version;   // version of the window maker
-};
+        static std::string csv_header() {
+            // Column order must match to_csv_row()
+            return "ticker,window_start,window_end,target_start,target_end";
+        }
+
+        static std::string csv_escape(const std::string& s) {
+            bool needs_quotes = false;
+            for (char c : s) {
+                if (c == '"' || c == ',' || c == '\n' || c == '\r') { needs_quotes = true; break; }
+            }
+            if (!needs_quotes) return s;
+            std::string out;
+            out.reserve(s.size() + 2);
+            out.push_back('"');
+            for (char c : s) {
+                if (c == '"') out.push_back('"'); // escape by doubling
+                out.push_back(c);
+            }
+            out.push_back('"');
+            return out;
+        }
+
+        std::string to_csv_row() const {
+            std::ostringstream oss;
+            oss << csv_escape(ticker) << ','
+                << window_start << ','
+                << window_end << ',';
+            if (target_start.has_value()) oss << *target_start;
+            oss << ',';
+            if (target_end.has_value()) oss << *target_end;
+            return oss.str();
+        }
+    };
+
+
 
 /**
  * Write a complete manifest to CSV.
@@ -60,14 +84,6 @@ bool append_windows_manifest_csv(const std::string& path,
 bool append_windows_manifest_csv_batch(const std::string& path,
                                        const std::vector<WindowRow>& rows,
                                        std::string* error_msg);
-
-/**
- * Write sidecar metadata as JSON next to a CSV manifest.
- * If manifest is /dir/manifest.csv, metadata is /dir/manifest.meta.json.
- */
-bool write_windows_manifest_metadata_json(const std::string& manifest_csv_path,
-                                          const WindowsManifestMeta& meta,
-                                          std::string* error_msg);
 
 
 }  // namespace rivulet
