@@ -31,14 +31,6 @@ struct WindowSpec {
   // Target control
   bool with_targets = true;                   // set false for unlabeled windows
 
-  // Data quality guards
-  std::int64_t min_history_ns = 0;            // require at least this much history before window_start
-  std::int64_t max_gap_ns = 0;                // largest allowed gap inside a window; 0 disables the check
-
-  // Session and calendar controls (optional, implement as needed)
-  bool exclude_weekends = false;
-  bool align_to_session = false;
-  std::string session_calendar;               // e.g., "XNYS"
 };
 
 /**
@@ -53,8 +45,6 @@ struct SingleTickerWindowSpec {
   std::int64_t horizon_ns = 0;
 
   bool with_targets = true;
-  std::int64_t min_history_ns = 0;
-  std::int64_t max_gap_ns = 0;
 };
 
 /**
@@ -106,30 +96,9 @@ bool make_windows_streaming(const WindowSpec& spec,
  * Windows are NOT guaranteed to be in any particular order.
  * Use this for large universes where order doesn't matter.
  */
-std::vector<WindowRow> make_windows_parallel(const WindowSpec& spec,
-                                             std::size_t num_threads,
-                                             std::string* error_msg);
+//std::vector<WindowRow> make_windows_parallel(const WindowSpec& spec,
+//                                             std::size_t num_threads,
+//                                             std::string* error_msg);
 
-/**
- * Convenience helpers that connect window generation to manifest persistence.
- * These route to CSV or Parquet writers without exposing storage details to callers.
- */
-
-// Build all windows then write a complete manifest file at once.
-bool build_and_write_manifest_csv(const WindowSpec& spec,
-                                  const std::string& manifest_csv_path,
-                                  std::string* error_msg);
-
-// Stream windows and append each row to an existing CSV manifest.
-// More efficient for large datasets as it doesn't hold all windows in memory.
-bool build_and_append_manifest_csv(const WindowSpec& spec,
-                                   const std::string& manifest_csv_path,
-                                   std::string* error_msg);
-
-// Build windows for a single ticker and append to manifest.
-// Useful for incremental updates when adding new tickers.
-bool build_and_append_manifest_csv_for_ticker(const SingleTickerWindowSpec& spec,
-                                              const std::string& manifest_csv_path,
-                                              std::string* error_msg);
 
 }  // namespace rivulet
