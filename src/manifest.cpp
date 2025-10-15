@@ -39,7 +39,6 @@ namespace rivulet {
     content_.total_tickers = catalog.work_items().size();
     content_.total_windows = catalog.total_windows_created();
     content_.total_input_rows = catalog.total_rows_processed() + catalog.total_rows_dropped();
-    content_.total_dropped_rows = catalog.total_rows_dropped();
     content_.ticker_stats = catalog.all_stats();
     content_.output_dir = config.output_dir;
     content_.build_ticker_index();
@@ -130,7 +129,6 @@ namespace rivulet {
     j["total_tickers"] = content_.total_tickers;
     j["total_windows"] = content_.total_windows;
     j["total_input_rows"] = content_.total_input_rows;
-    j["total_dropped_rows"] = content_.total_dropped_rows;
 
     // Per-ticker stats
     json ticker_stats_array = json::array();
@@ -182,7 +180,6 @@ namespace rivulet {
       manifest.content_.total_tickers = j.at("total_tickers").get<std::size_t>();
       manifest.content_.total_windows = j.at("total_windows").get<std::size_t>();
       manifest.content_.total_input_rows = j.at("total_input_rows").get<std::size_t>();
-      manifest.content_.total_dropped_rows = j.at("total_dropped_rows").get<std::size_t>();
       manifest.content_.output_dir = j.at("output_dir").get<std::string>();
       // Per-ticker stats
       manifest.content_.ticker_stats.clear();

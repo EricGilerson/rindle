@@ -46,7 +46,6 @@ namespace rivulet {
         std::size_t total_tickers;
         std::size_t total_windows;
         std::size_t total_input_rows;
-        std::size_t total_dropped_rows;
 
         // Per-ticker breakdown
         std::vector<TickerStats> ticker_stats;
