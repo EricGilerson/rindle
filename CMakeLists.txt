@@ -43,8 +43,6 @@ add_library(rivulet STATIC
         include/rivulet/csv_io.hpp
         src/manifest.cpp
         include/rivulet/manifest.hpp
-        src/clean.cpp
-        include/rivulet/clean.hpp
         src/window_maker.cpp
         include/rivulet/window_maker.hpp
         src/catalog.cpp
