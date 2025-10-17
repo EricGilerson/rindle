@@ -5,7 +5,6 @@
 
 // Only include PUBLIC types that users need
 #include "rivulet/types.hpp"
-#include "rivulet/dataset_builder.hpp"
 
 // Forward declarations - users don't need to see internal types
 namespace rivulet {

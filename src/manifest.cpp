@@ -15,7 +15,7 @@
     - Keep fields stable; add versioning if you evolve the contract.
 ==============================================================================*/
 
-#include "rivulet/manifest.hpp"
+#include "internal/manifest.hpp"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <iomanip>

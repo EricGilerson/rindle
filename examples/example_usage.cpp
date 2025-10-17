@@ -1,7 +1,7 @@
-#include <rivulet/rivulet.hpp>
+#include <rivulet.hpp>
 #include <iostream>
 
-#include "rivulet/manifest.hpp"
+#include "../src/internal/manifest.hpp"
 
 int main() {
     using namespace rivulet;

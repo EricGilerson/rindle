@@ -9,7 +9,7 @@
 #include <vector>
 #include <cerrno>
 #include <cstring>
-#include "rivulet/window_manifest.hpp"
+#include "internal/window_manifest.hpp"
 
 namespace rivulet {
 

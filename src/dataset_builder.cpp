@@ -1,8 +1,8 @@
 // src/dataset_builder.cpp
-#include "rivulet/dataset_builder.hpp"
+#include "internal/dataset_builder.hpp"
 #include <algorithm>
 #include <cassert>
-#include "rivulet/csv_io.hpp"
+#include "internal/csv_io.hpp"
 #include <unordered_map>
 #include <filesystem>
 

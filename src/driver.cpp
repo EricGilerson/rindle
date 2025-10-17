@@ -19,9 +19,9 @@
     - Raw CSV data is used as-is; window_maker works with row indices.
 ==============================================================================*/
 
-#include "rivulet/driver.hpp"
-#include "rivulet/csv_io.hpp"
-#include "rivulet/window_manifest.hpp"
+#include "internal/driver.hpp"
+#include "internal/csv_io.hpp"
+#include "internal/window_manifest.hpp"
 
 #include <iostream>
 #include <fstream>

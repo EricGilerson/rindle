@@ -5,8 +5,8 @@
 #include <vector>
 #include <optional>
 
-#include "rivulet/window_manifest.hpp"  // WindowRow, TickerStats, CSV helpers
-#include "rivulet/window_maker.hpp"     // WindowSpec, make_windows_streaming, etc.
+#include "window_manifest.hpp"
+#include "window_maker.hpp"
 
 namespace rivulet {
 

@@ -16,9 +16,9 @@
     - Guarantees “no future leakage”: windows use rows ≤ end, targets start at end.
 ==============================================================================*/
 
-#include "rivulet/window_maker.hpp"
+#include "internal/window_maker.hpp"
 #include "filesystem"
-#include "rivulet/driver.hpp"
+#include "internal/driver.hpp"
 
 namespace rivulet {
   bool build_and_write_manifest_csv(const WindowSpec& spec,

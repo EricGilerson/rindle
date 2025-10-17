@@ -36,28 +36,33 @@ endif()
 
 # Library target
 add_library(rivulet STATIC
+        # Public headers
         include/rivulet/types.hpp
-        include/rivulet/scaler.hpp
+        include/rivulet.hpp
+
+        # Private headers (internal implementation)
+        src/internal/scaler.hpp
+        src/internal/csv_io.hpp
+        src/internal/manifest.hpp
+        src/internal/window_maker.hpp
+        src/internal/catalog.hpp
+        src/internal/driver.hpp
+        src/internal/window_manifest.hpp
+        src/internal/dataset_builder.hpp
+
+        # Source files
         src/scaler.cpp
         src/csv_io.cpp
-        include/rivulet/csv_io.hpp
         src/manifest.cpp
-        include/rivulet/manifest.hpp
         src/window_maker.cpp
-        include/rivulet/window_maker.hpp
         src/catalog.cpp
-        include/rivulet/catalog.hpp
         src/driver.cpp
-        include/rivulet/driver.hpp
         src/types.cpp
-        include/rivulet/window_manifest.hpp
         src/window_manifest.cpp
         src/dataset_builder.cpp
-        include/rivulet/dataset_builder.hpp
-        include/rivulet/rivulet.hpp
         src/rivulet_api.cpp
-        examples/example_usage.cpp
 )
+
 target_include_directories(rivulet PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>

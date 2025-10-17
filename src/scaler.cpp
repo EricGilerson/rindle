@@ -3,7 +3,7 @@
 //
 
 #pragma once
-#include "rivulet/scaler.hpp"
+#include "internal/scaler.hpp"
 
 namespace rivulet {
     // StandardScaler: (x - mean) / std

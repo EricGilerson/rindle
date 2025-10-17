@@ -22,7 +22,7 @@
 #define RIVULET_MANIFEST_HPP
 
 #pragma once
-#include "types.hpp"
+#include "../../include/rivulet/types.hpp"
 #include <filesystem>
 #include <string>
 #include <vector>

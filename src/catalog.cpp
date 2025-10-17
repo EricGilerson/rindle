@@ -15,7 +15,7 @@
     - Ignores non-CSV files; normalization rules are centralized here.
 ==============================================================================*/
 
-#include "rivulet/catalog.hpp"
+#include "internal/catalog.hpp"
 
 namespace rivulet {
     Catalog::Catalog(const DatasetConfig& config) : config_(config) {}

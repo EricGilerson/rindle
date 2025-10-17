@@ -1,11 +1,11 @@
-#include "rivulet/rivulet.hpp"
+#include "../include/rivulet.hpp"
 
 // Internal headers (users cannot access these)
-#include "rivulet/driver.hpp"
-#include "rivulet/catalog.hpp"
-#include "rivulet/manifest.hpp"
-#include "rivulet/csv_io.hpp"
-#include "rivulet/window_manifest.hpp"
+#include "internal/driver.hpp"
+#include "internal/catalog.hpp"
+#include "internal/manifest.hpp"
+#include "internal/csv_io.hpp"
+#include "internal/window_manifest.hpp"
 
 #include <fstream>
 #include <sstream>
