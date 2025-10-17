@@ -50,6 +50,8 @@ namespace rivulet {
         // Per-ticker breakdown
         std::vector<TickerStats> ticker_stats;
         std::unordered_map<std::string, std::size_t> ticker_index;
+
+        std::filesystem::path input_dir;
         std::filesystem::path output_dir;
 
         void build_ticker_index() {

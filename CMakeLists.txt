@@ -54,6 +54,9 @@ add_library(rivulet STATIC
         src/window_manifest.cpp
         src/dataset_builder.cpp
         include/rivulet/dataset_builder.hpp
+        include/rivulet/rivulet.hpp
+        src/rivulet_api.cpp
+        examples/example_usage.cpp
 )
 target_include_directories(rivulet PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

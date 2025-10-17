@@ -40,6 +40,7 @@ namespace rivulet {
     content_.total_windows = catalog.total_windows_created();
     content_.total_input_rows = catalog.total_rows_processed() + catalog.total_rows_dropped();
     content_.ticker_stats = catalog.all_stats();
+    content_.input_dir = config.input_dir;
     content_.output_dir = config.output_dir;
     content_.build_ticker_index();
 
@@ -136,12 +137,12 @@ namespace rivulet {
       json stats_obj;
       stats_obj["ticker"] = stats.ticker;
       stats_obj["input_rows"] = stats.input_rows;
-      stats_obj["rows_dropped"] = stats.rows_dropped;
       stats_obj["windows_created"] = stats.windows_created;
       stats_obj["was_sorted"] = stats.was_sorted;
       ticker_stats_array.push_back(stats_obj);
     }
     j["ticker_stats"] = ticker_stats_array;
+    j["input_dir"] = content_.input_dir.string();
     j["output_dir"] = content_.output_dir.string();
 
     // Build metadata
@@ -180,6 +181,7 @@ namespace rivulet {
       manifest.content_.total_tickers = j.at("total_tickers").get<std::size_t>();
       manifest.content_.total_windows = j.at("total_windows").get<std::size_t>();
       manifest.content_.total_input_rows = j.at("total_input_rows").get<std::size_t>();
+      manifest.content_.input_dir = j.at("input_dir").get<std::string>();
       manifest.content_.output_dir = j.at("output_dir").get<std::string>();
       // Per-ticker stats
       manifest.content_.ticker_stats.clear();
@@ -188,7 +190,6 @@ namespace rivulet {
           TickerStats stats;
           stats.ticker = stats_json.at("ticker").get<std::string>();
           stats.input_rows = stats_json.at("input_rows").get<std::size_t>();
-          stats.rows_dropped = stats_json.at("rows_dropped").get<std::size_t>();
           stats.windows_created = stats_json.at("windows_created").get<std::size_t>();
           stats.was_sorted = stats_json.at("was_sorted").get<bool>();
           manifest.content_.ticker_stats.push_back(stats);

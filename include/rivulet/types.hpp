@@ -104,7 +104,6 @@ namespace rivulet {
         std::string ticker;
         std::size_t input_rows = 0;
         std::size_t processed_rows = 0;
-        std::size_t rows_dropped = 0;
         std::size_t windows_created = 0;
         bool was_sorted = false;
     };

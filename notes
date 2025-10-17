@@ -9,3 +9,8 @@ types.hpp (base)
   └─→ engine.cpp
 
 driver.cpp (uses: catalog, csv_io, clean, window_maker, manifest)
+
+new name ideas:
+WindowFlow
+Rivulo
+Rindle - might be the move
