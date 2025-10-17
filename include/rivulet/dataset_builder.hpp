@@ -10,7 +10,7 @@
 
 namespace rivulet {
 
-// Compact row-major 3D tensor: [W][S][F] contiguous.
+// Compact row-major 3D tensor: [Window][Sequence][Feature] contiguous.
 struct Tensor3D {
   using value_type = float;
 

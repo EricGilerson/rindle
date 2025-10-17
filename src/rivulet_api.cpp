@@ -13,9 +13,7 @@
 
 namespace rivulet {
 
-//==============================================================================
 // 1. create_config - Build DatasetConfig with validation
-//==============================================================================
 
 Result<DatasetConfig> create_config(
     const std::filesystem::path& input_dir,
@@ -90,9 +88,7 @@ Result<DatasetConfig> create_config(
     };
 }
 
-//==============================================================================
 // 2. build_dataset - Execute full pipeline
-//==============================================================================
 
 Result<ManifestContent> build_dataset(const DatasetConfig& config) {
     // Create driver with the config
@@ -126,9 +122,7 @@ Result<ManifestContent> build_dataset(const DatasetConfig& config) {
     };
 }
 
-//==============================================================================
 // 3. get_dataset - Load tensors from built dataset
-//==============================================================================
 
 Result<Dataset> get_dataset(const ManifestContent& manifest_content) {
     std::string error_msg;
