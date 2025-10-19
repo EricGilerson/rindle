@@ -22,7 +22,7 @@
 #define RIVULET_MANIFEST_HPP
 
 #pragma once
-#include "../../include/rivulet/types.hpp"
+#include "../../include/rivulet/manifest_types.hpp"
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -30,45 +30,6 @@
 #include "catalog.hpp"
 
 namespace rivulet {
-    using TickerMap = std::unordered_map<std::string, const TickerStats*>;
-    struct ManifestContent {
-        int version = 1;
-
-        // Dataset configuration
-        std::size_t seq_length;
-        std::size_t future_horizon;
-        std::vector<std::string> feature_columns;
-        std::optional<std::string> target_column;
-        TimeMode time_mode;
-        bool row_major;
-
-        // Statistics
-        std::size_t total_tickers;
-        std::size_t total_windows;
-        std::size_t total_input_rows;
-
-        // Per-ticker breakdown
-        std::vector<TickerStats> ticker_stats;
-        std::unordered_map<std::string, std::size_t> ticker_index;
-
-        std::filesystem::path input_dir;
-        std::filesystem::path output_dir;
-
-        void build_ticker_index() {
-            ticker_index.clear();
-            ticker_index.reserve(ticker_stats.size());
-            for (std::size_t i = 0; i < ticker_stats.size(); ++i) {
-                ticker_index.emplace(ticker_stats[i].ticker, i);
-            }
-        }
-        const TickerStats* find_stats(std::string_view name) const {
-            auto it = ticker_index.find(std::string(name));
-            if (it == ticker_index.end()) return nullptr;
-            return &ticker_stats[it->second];
-        }
-        // Build metadata
-        std::string build_timestamp;
-    };
 
     class Manifest {
     public:

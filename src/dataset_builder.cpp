@@ -85,9 +85,13 @@ bool DatasetBuilder::fill_data(const WindowSpec& wspec,
   const std::int64_t S = plan.spec.seq_len;
   const std::int64_t Fx = plan.spec.feature_count;
   const std::int64_t Fy = plan.spec.target_count;
+  const bool need_targets = (Fy > 0) && wspec.with_targets;
 
   std::vector<float> fx_buf(static_cast<std::size_t>(S * Fx));
-  std::vector<float> fy_buf(static_cast<std::size_t>(S * Fy));
+  std::vector<float> fy_buf;
+  if (need_targets) {
+    fy_buf.resize(static_cast<std::size_t>(S * Fy));
+  }
 
   // Second pass: stream again to materialize X/Y and meta.
   std::int64_t global_w = 0;
@@ -99,14 +103,18 @@ bool DatasetBuilder::fill_data(const WindowSpec& wspec,
 
     // Caller supplies these readers; they fill contiguous [S*F] buffers.
     if (!read_features_block(t, start_row, S, fx_buf, error_msg)) return false;
-    if (!read_targets_block(t, start_row, S, fy_buf, error_msg)) return false;
+    if (need_targets) {
+      if (!read_targets_block(t, start_row, S, fy_buf, error_msg)) return false;
+    }
 
     // Copy into contiguous window block.
     float* xdst = out.X.window_ptr(global_w);
     std::copy(fx_buf.begin(), fx_buf.end(), xdst);
 
-    float* ydst = out.Y.window_ptr(global_w);
-    std::copy(fy_buf.begin(), fy_buf.end(), ydst);
+    if (need_targets) {
+      float* ydst = out.Y.window_ptr(global_w);
+      std::copy(fy_buf.begin(), fy_buf.end(), ydst);
+    }
 
     // Meta
     WindowMeta meta;

@@ -1,8 +1,6 @@
 #include <rivulet.hpp>
 #include <iostream>
 
-#include "../src/internal/manifest.hpp"
-
 int main() {
     using namespace rivulet;
     
