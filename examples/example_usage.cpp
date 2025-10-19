@@ -1,4 +1,4 @@
-#include <rivulet.hpp>
+#include <../include/rivulet.hpp>
 #include <iostream>
 
 int main() {
@@ -13,10 +13,10 @@ int main() {
     auto config_result = create_config(
         "data/raw",                              // input_dir
         "data/processed",                         // output_dir
-        {"Open", "High", "Low", "Close", "Volume"}, // feature_columns
+        {"Price_0939", "Prev_Delta_Close", "Gap", "Composite_HL"}, // feature_columns
         50,                                       // seq_length (L)
         1,                                        // future_horizon (H)
-        "Close",                                  // target_column
+        "Delta_Close",                                  // target_column
         TimeMode::UTC_NS,                         // time_mode
         false                                     // row_major
     );
