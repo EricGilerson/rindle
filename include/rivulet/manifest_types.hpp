@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "rivulet/types.hpp"
+#include "../../include/rivulet/types.hpp"
 
 #include <filesystem>
 #include <string>

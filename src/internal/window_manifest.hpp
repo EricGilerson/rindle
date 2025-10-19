@@ -7,6 +7,7 @@
 #include <string_view>
 #include <vector>
 #include <functional>
+#include <optional>
 #include <sstream>
 
 namespace rivulet {
