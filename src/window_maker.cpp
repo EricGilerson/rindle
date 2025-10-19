@@ -17,7 +17,7 @@
 ==============================================================================*/
 
 #include "internal/window_maker.hpp"
-#include "filesystem"
+#include <filesystem>
 #include "internal/driver.hpp"
 
 namespace rivulet {

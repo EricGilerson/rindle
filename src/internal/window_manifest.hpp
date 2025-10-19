@@ -7,6 +7,7 @@
 #include <string_view>
 #include <vector>
 #include <functional>
+#include <sstream>
 
 namespace rivulet {
 
@@ -87,3 +88,4 @@ bool append_windows_manifest_csv_batch(const std::string& path,
 
 
 }  // namespace rivulet
+

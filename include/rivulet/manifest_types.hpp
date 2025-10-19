@@ -10,6 +10,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <vector>
+#include <optional>
 
 namespace rivulet {
 
@@ -61,3 +62,4 @@ using TickerMap = std::unordered_map<std::string, const TickerStats*>;
 } // namespace rivulet
 
 #endif // RIVULET_MANIFEST_TYPES_HPP
+

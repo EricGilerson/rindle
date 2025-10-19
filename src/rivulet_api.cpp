@@ -1,4 +1,4 @@
-#include "../include/rivulet.hpp"
+#include "rivulet.hpp"
 
 // Internal headers (users cannot access these)
 #include "internal/driver.hpp"
