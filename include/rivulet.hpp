@@ -5,10 +5,10 @@
 
 // Only include PUBLIC types that users need
 #include "rivulet/types.hpp"
+#include "rivulet/manifest_types.hpp"
 
 // Forward declarations - users don't need to see internal types
 namespace rivulet {
-    struct ManifestContent;
     class Manifest;
     class Catalog;
     class Driver;
