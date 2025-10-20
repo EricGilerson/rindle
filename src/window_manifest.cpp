@@ -140,8 +140,9 @@ bool write_windows_manifest_parquet(const std::string& path,
         if (ec) {
             fs::copy_file(tmp, dst, fs::copy_options::overwrite_existing, ec);
             if (ec) {
+                std::error_code copy_ec = ec;
                 fs::remove(tmp, ec);
-                return fail("Failed to move temp file into place: " + ec.message());
+                return fail("Failed to move temp file into place: " + copy_ec.message());
             }
             fs::remove(tmp, ec);
         }
