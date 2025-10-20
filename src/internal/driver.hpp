@@ -25,7 +25,7 @@
 #define RIVULET_DRIVER_HPP
 
 #pragma once
-#include "rivulet/types.hpp"
+#include "rindle/types.hpp"
 #include "catalog.hpp"
 #include "window_maker.hpp"
 #include "manifest.hpp"

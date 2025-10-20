@@ -21,7 +21,7 @@
 #define RIVULET_CATALOG_HPP
 
 #pragma once
-#include "rivulet/types.hpp"
+#include "rindle/types.hpp"
 #include <filesystem>
 #include <vector>
 #include <string>

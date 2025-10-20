@@ -7,7 +7,7 @@
 
 #include "window_manifest.hpp"
 #include "window_maker.hpp"
-#include "rivulet/dataset_types.hpp"
+#include "rindle/dataset_types.hpp"
 
 namespace rivulet {
 

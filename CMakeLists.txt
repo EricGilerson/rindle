@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(rivulet LANGUAGES CXX)
+project(rindle LANGUAGES CXX)
 
 # Default to Release unless the user sets something else
 if(NOT CMAKE_BUILD_TYPE)
@@ -12,13 +12,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Options
-option(RIVULET_ENABLE_WARNINGS "Enable strict warnings" ON)
-option(RIVULET_ENABLE_ASAN "Enable AddressSanitizer in Debug" ON)
-option(RIVULET_BUILD_TESTS "Build unit tests" ON)
-option(RIVULET_BUILD_EXAMPLES "Build example executables" ON)
+option(RINDLE_ENABLE_WARNINGS "Enable strict warnings" ON)
+option(RINDLE_ENABLE_ASAN "Enable AddressSanitizer in Debug" ON)
+option(RINDLE_BUILD_TESTS "Build unit tests" ON)
+option(RINDLE_BUILD_EXAMPLES "Build example executables" ON)
 
 # Warnings (Clang/GCC/MSVC)
-if(RIVULET_ENABLE_WARNINGS)
+if(RINDLE_ENABLE_WARNINGS)
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
         add_compile_options(
                 -Wall -Wextra -Wpedantic -Wconversion -Wshadow
@@ -31,7 +31,7 @@ if(RIVULET_ENABLE_WARNINGS)
 endif()
 
 # AddressSanitizer in Debug
-if(RIVULET_ENABLE_ASAN AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+if(RINDLE_ENABLE_ASAN AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
         add_compile_options(-fsanitize=address)
         add_link_options(-fsanitize=address)
@@ -49,11 +49,11 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(nlohmann_json)
 
 # Library target
-add_library(rivulet STATIC
+add_library(rindle STATIC
         # Public headers
-        include/rivulet/types.hpp
-        include/rivulet/dataset_types.hpp
-        include/rivulet.hpp
+        include/rindle/types.hpp
+        include/rindle/dataset_types.hpp
+        include/rindle.hpp
 
         # Private headers
         src/internal/scaler.hpp
@@ -75,10 +75,10 @@ add_library(rivulet STATIC
         src/types.cpp
         src/window_manifest.cpp
         src/dataset_builder.cpp
-        src/rivulet_api.cpp
+        src/rindle_api.cpp
 )
 
-target_include_directories(rivulet
+target_include_directories(rindle
         PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
@@ -86,12 +86,12 @@ target_include_directories(rivulet
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(rivulet
+target_link_libraries(rindle
         PRIVATE nlohmann_json::nlohmann_json
 )
 
 # Tests
-if(RIVULET_BUILD_TESTS)
+if(RINDLE_BUILD_TESTS)
     FetchContent_Declare(
             catch2
             GIT_REPOSITORY https://github.com/catchorg/Catch2.git
@@ -99,17 +99,17 @@ if(RIVULET_BUILD_TESTS)
     )
     FetchContent_MakeAvailable(catch2)
 
-    add_executable(rivulet_tests
+    add_executable(rindle_tests
             tests/engine_basic_tests.cpp
     )
-    target_link_libraries(rivulet_tests PRIVATE rivulet Catch2::Catch2WithMain)
+    target_link_libraries(rindle_tests PRIVATE rindle Catch2::Catch2WithMain)
     include(CTest)
     include(Catch)
-    catch_discover_tests(rivulet_tests)
+    catch_discover_tests(rindle_tests)
 endif()
 
 # Examples
-if(RIVULET_BUILD_EXAMPLES)
+if(RINDLE_BUILD_EXAMPLES)
     add_executable(example_usage examples/example_usage.cpp)
-    target_link_libraries(example_usage PRIVATE rivulet)
+    target_link_libraries(example_usage PRIVATE rindle)
 endif()

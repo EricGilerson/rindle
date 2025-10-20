@@ -15,4 +15,4 @@
     - May be empty initially; added only if/when needed.
 ==============================================================================*/
 
-#include "rivulet/types.hpp"
+#include "rindle/types.hpp"

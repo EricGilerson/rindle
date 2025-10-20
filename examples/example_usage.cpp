@@ -1,4 +1,4 @@
-#include "../include/rivulet.hpp"
+#include "../include/rindle.hpp"
 #include <iostream>
 
 int main() {

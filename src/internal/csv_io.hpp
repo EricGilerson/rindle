@@ -8,7 +8,7 @@
 #include <optional>
 #include <filesystem>
 
-#include "rivulet/types.hpp" // for Timestamp, Nanoseconds, etc.
+#include "rindle/types.hpp" // for Timestamp, Nanoseconds, etc.
 
 namespace rivulet {
 

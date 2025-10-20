@@ -4,8 +4,8 @@
 #pragma once
 
 // Only include PUBLIC types that users need
-#include "rivulet/types.hpp"
-#include "rivulet/manifest_types.hpp"
+#include "rindle/types.hpp"
+#include "rindle/manifest_types.hpp"
 
 // Forward declarations - users don't need to see internal types
 namespace rivulet {
