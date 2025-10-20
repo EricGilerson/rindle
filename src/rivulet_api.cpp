@@ -7,6 +7,8 @@
 #include "internal/csv_io.hpp"
 #include "internal/window_manifest.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <sstream>
 #include <unordered_map>
@@ -143,6 +145,16 @@ Result<Dataset> get_dataset(const ManifestContent& manifest_content) {
         };
     }
 
+    if (manifest_content.input_dir.empty() ||
+        !std::filesystem::exists(manifest_content.input_dir) ||
+        !std::filesystem::is_directory(manifest_content.input_dir)) {
+        return Result<Dataset>{
+            std::nullopt,
+            Status::Error("Input directory does not exist: " +
+                         manifest_content.input_dir.string())
+        };
+    }
+
     // Prepare dataset structure
     Dataset dataset;
 
@@ -155,6 +167,31 @@ Result<Dataset> get_dataset(const ManifestContent& manifest_content) {
 
     // Cache for loaded CSV data (ticker -> CsvFrame)
     std::unordered_map<std::string, CsvFrame> csv_cache;
+
+    // Build lookup map from normalized ticker -> input CSV path
+    auto normalize_ticker = [](const std::filesystem::path& path) {
+        std::string filename = path.stem().string();
+        std::string ticker;
+        ticker.reserve(filename.size());
+        for (char c : filename) {
+            if (!std::isspace(static_cast<unsigned char>(c))) {
+                ticker += static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+            }
+        }
+        return ticker;
+    };
+
+    std::unordered_map<std::string, std::filesystem::path> ticker_to_input_path;
+    for (const auto& entry : std::filesystem::directory_iterator(manifest_content.input_dir)) {
+        if (!entry.is_regular_file() || entry.path().extension() != ".csv") {
+            continue;
+        }
+
+        std::string ticker = normalize_ticker(entry.path());
+        if (!ticker.empty() && !ticker_to_input_path.count(ticker)) {
+            ticker_to_input_path.emplace(std::move(ticker), entry.path());
+        }
+    }
 
     // Read window manifests for each ticker
     for (const auto& ticker_stats : manifest_content.ticker_stats) {
@@ -244,43 +281,15 @@ Result<Dataset> get_dataset(const ManifestContent& manifest_content) {
         auto cache_it = csv_cache.find(window_row.ticker);
 
         if (cache_it == csv_cache.end()) {
-            // Need to load the CSV from the ORIGINAL input directory
-            // Find the original input file path from the catalog/manifest
-
-            // The input file should be: input_dir/{ticker}.csv
-            // We need to reconstruct this path
-            std::filesystem::path input_csv;
-
-            // Search for matching CSV file in input directory
-            // The catalog normalizes ticker names, so we need to find the original file
-            bool found = false;
-            for (const auto& entry : std::filesystem::directory_iterator(manifest_content.output_dir.parent_path() / ".." / "input")) {
-                if (entry.is_regular_file() && entry.path().extension() == ".csv") {
-                    std::string filename = entry.path().stem().string();
-                    // Normalize and compare
-                    std::string normalized;
-                    for (char c : filename) {
-                        if (!std::isspace(static_cast<unsigned char>(c))) {
-                            normalized += std::toupper(static_cast<unsigned char>(c));
-                        }
-                    }
-                    if (normalized == window_row.ticker) {
-                        input_csv = entry.path();
-                        found = true;
-                        break;
-                    }
-                }
-            }
-
-            if (!found) {
-                // Fallback: try direct path construction
-                // Assume input_dir is stored or can be inferred
-                // Since manifest doesn't store input_dir, we need to look for the file
+            auto path_it = ticker_to_input_path.find(window_row.ticker);
+            if (path_it == ticker_to_input_path.end()) {
                 return Result<Dataset>{
                     std::nullopt,
                     Status::Error("Cannot find original input CSV for ticker: " + window_row.ticker)
                 };
             }
+
+            const std::filesystem::path& input_csv = path_it->second;
 
             // Load the CSV
             CsvFrame frame;
