@@ -51,7 +51,6 @@ namespace rivulet {
         // Summary
         std::size_t total_windows_created() const;
         std::size_t total_rows_processed() const;
-        std::size_t total_rows_dropped() const;
 
     private:
         const DatasetConfig& config_;

@@ -11,16 +11,20 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Warnings and sanitizers (toggle via options)
+# Options
 option(RIVULET_ENABLE_WARNINGS "Enable strict warnings" ON)
 option(RIVULET_ENABLE_ASAN "Enable AddressSanitizer in Debug" ON)
 option(RIVULET_BUILD_TESTS "Build unit tests" ON)
-option(RIVULET_BUILD_CLI "Build CLI tool" ON)
+option(RIVULET_BUILD_EXAMPLES "Build example executables" ON)
 
-# Global warnings (Clang/GCC)
+# Warnings (Clang/GCC/MSVC)
 if(RIVULET_ENABLE_WARNINGS)
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-        add_compile_options(-Wall -Wextra -Wpedantic -Wconversion -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Woverloaded-virtual -Wnull-dereference -Wdouble-promotion)
+        add_compile_options(
+                -Wall -Wextra -Wpedantic -Wconversion -Wshadow
+                -Wnon-virtual-dtor -Wold-style-cast -Woverloaded-virtual
+                -Wnull-dereference -Wdouble-promotion
+        )
     elseif(MSVC)
         add_compile_options(/W4 /permissive-)
     endif()
@@ -34,13 +38,24 @@ if(RIVULET_ENABLE_ASAN AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     endif()
 endif()
 
+# Dependencies
+include(FetchContent)
+
+FetchContent_Declare(
+        nlohmann_json
+        GIT_REPOSITORY https://github.com/nlohmann/json.git
+        GIT_TAG v3.11.3
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
 # Library target
 add_library(rivulet STATIC
         # Public headers
         include/rivulet/types.hpp
+        include/rivulet/dataset_types.hpp
         include/rivulet.hpp
 
-        # Private headers (internal implementation)
+        # Private headers
         src/internal/scaler.hpp
         src/internal/csv_io.hpp
         src/internal/manifest.hpp
@@ -50,7 +65,7 @@ add_library(rivulet STATIC
         src/internal/window_manifest.hpp
         src/internal/dataset_builder.hpp
 
-        # Source files
+        # Sources
         src/scaler.cpp
         src/csv_io.cpp
         src/manifest.cpp
@@ -63,25 +78,20 @@ add_library(rivulet STATIC
         src/rivulet_api.cpp
 )
 
-target_include_directories(rivulet PUBLIC
+target_include_directories(rivulet
+        PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
+        PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-# Dependencies (add real ones later; Arrow/Parquet/pybind11/FAISS are future steps)
-# For now, just standard library.
-
-# CLI
-if(RIVULET_BUILD_CLI)
-    add_executable(rivulet_cli src/main_cli.cpp
-            src/main_cli.cpp)
-    target_link_libraries(rivulet_cli PRIVATE rivulet)
-    set_target_properties(rivulet_cli PROPERTIES OUTPUT_NAME "rivulet")
-endif()
+target_link_libraries(rivulet
+        PRIVATE nlohmann_json::nlohmann_json
+)
 
 # Tests
 if(RIVULET_BUILD_TESTS)
-    include(FetchContent)
     FetchContent_Declare(
             catch2
             GIT_REPOSITORY https://github.com/catchorg/Catch2.git
@@ -89,22 +99,17 @@ if(RIVULET_BUILD_TESTS)
     )
     FetchContent_MakeAvailable(catch2)
 
-    add_executable(rivulet_tests tests/engine_basic_tests.cpp
-            tests/engine_basic_tests.cpp)
+    add_executable(rivulet_tests
+            tests/engine_basic_tests.cpp
+    )
     target_link_libraries(rivulet_tests PRIVATE rivulet Catch2::Catch2WithMain)
     include(CTest)
     include(Catch)
     catch_discover_tests(rivulet_tests)
 endif()
 
-include(FetchContent)
-
-FetchContent_Declare(
-        nlohmann_json
-        GIT_REPOSITORY https://github.com/nlohmann/json.git
-        GIT_TAG v3.11.3  # or latest version
-)
-
-FetchContent_MakeAvailable(nlohmann_json)
-
-target_link_libraries(rivulet PRIVATE nlohmann_json::nlohmann_json)
+# Examples
+if(RIVULET_BUILD_EXAMPLES)
+    add_executable(example_usage examples/example_usage.cpp)
+    target_link_libraries(example_usage PRIVATE rivulet)
+endif()

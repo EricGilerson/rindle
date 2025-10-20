@@ -8,7 +8,7 @@
 #include <string_view>
 #include <vector>
 
-#include "../../include/rivulet/types.hpp"
+#include "rivulet/types.hpp"
 #include "window_manifest.hpp"
 
 namespace rivulet {

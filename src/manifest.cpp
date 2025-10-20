@@ -38,7 +38,7 @@ namespace rivulet {
     content_.row_major = config.row_major;
     content_.total_tickers = catalog.work_items().size();
     content_.total_windows = catalog.total_windows_created();
-    content_.total_input_rows = catalog.total_rows_processed() + catalog.total_rows_dropped();
+    content_.total_input_rows = catalog.total_rows_processed();
     content_.ticker_stats = catalog.all_stats();
     content_.input_dir = config.input_dir;
     content_.output_dir = config.output_dir;

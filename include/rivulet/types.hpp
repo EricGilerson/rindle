@@ -32,7 +32,7 @@
 #include <vector>
 #include <optional>
 #include <filesystem>
-#include "../../src/internal/dataset_builder.hpp"
+#include "dataset_types.hpp"
 
 namespace rivulet {
 
