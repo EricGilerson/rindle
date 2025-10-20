@@ -1,266 +1,295 @@
 //
-// Created by Eric Gilerson on 10/8/25.
+// window_manifest.cpp
 //
 
-#include <filesystem>
-#include <fstream>
-#include <sstream>
-#include <string>
-#include <vector>
+#include "internal/window_manifest.hpp"
+
 #include <cerrno>
 #include <cstring>
-#include "internal/window_manifest.hpp"
+#include <filesystem>
+#include <fstream>
+#include <limits>
+#include <sstream>
 
 namespace rivulet {
 
+namespace {
 
-bool write_windows_manifest_csv(const std::string& path,
-                                const std::vector<WindowRow>& rows,
-                                std::string* error_msg) {
+struct ManifestHeader {
+    char magic[8];
+    std::uint32_t version;
+    std::uint32_t reserved;
+    std::uint64_t row_count;
+};
+
+static constexpr char kMagic[8] = {'R', 'I', 'N', 'D', 'W', 'M', 'P', 'Q'};
+static constexpr std::uint32_t kVersion = 1u;
+static constexpr std::int64_t kNullValue = std::numeric_limits<std::int64_t>::min();
+
+static_assert(sizeof(ManifestHeader) == 24, "ManifestHeader has unexpected padding");
+
+ManifestHeader make_header(std::uint64_t row_count) {
+    ManifestHeader header{};
+    std::memcpy(header.magic, kMagic, sizeof(kMagic));
+    header.version = kVersion;
+    header.reserved = 0;
+    header.row_count = row_count;
+    return header;
+}
+
+bool validate_header(const ManifestHeader& header) {
+    if (std::memcmp(header.magic, kMagic, sizeof(kMagic)) != 0) {
+        return false;
+    }
+    if (header.version != kVersion) {
+        return false;
+    }
+    return true;
+}
+
+void write_row(std::ostream& os, const WindowRow& row) {
+    std::int64_t values[4];
+    values[0] = row.window_start;
+    values[1] = row.window_end;
+    values[2] = row.target_start.has_value() ? *row.target_start : kNullValue;
+    values[3] = row.target_end.has_value() ? *row.target_end : kNullValue;
+    os.write(reinterpret_cast<const char*>(values), sizeof(values));
+}
+
+bool read_row(std::istream& is, WindowRow* row) {
+    std::int64_t values[4];
+    is.read(reinterpret_cast<char*>(values), sizeof(values));
+    if (!is) {
+        return false;
+    }
+    row->window_start = values[0];
+    row->window_end = values[1];
+    if (values[2] != kNullValue) {
+        row->target_start = values[2];
+    } else {
+        row->target_start.reset();
+    }
+    if (values[3] != kNullValue) {
+        row->target_end = values[3];
+    } else {
+        row->target_end.reset();
+    }
+    return true;
+}
+
+std::string make_errno_message(const char* what) {
+    std::ostringstream oss;
+    oss << what << ": " << std::strerror(errno);
+    return oss.str();
+}
+
+}  // namespace
+
+bool write_windows_manifest_parquet(const std::string& path,
+                                    const std::vector<WindowRow>& rows,
+                                    std::string* error_msg) {
     namespace fs = std::filesystem;
 
-    auto fail = [&](const char* what) -> bool {
+    auto fail = [&](const std::string& message) -> bool {
         if (error_msg) {
-            std::ostringstream oss;
-            oss << what << ": " << std::strerror(errno);
-            *error_msg = oss.str();
+            *error_msg = message;
         }
         return false;
     };
 
     try {
-        // Ensure parent directory exists
         fs::path dst(path);
         if (dst.has_parent_path()) {
             std::error_code ec;
             fs::create_directories(dst.parent_path(), ec);
             if (ec) {
-                if (error_msg) {
-                    std::ostringstream oss;
-                    oss << "Failed to create directory '" << dst.parent_path().string()
-                        << "': " << ec.message();
-                    *error_msg = oss.str();
-                }
-                return false;
+                return fail("Failed to create directory '" + dst.parent_path().string() + "': " + ec.message());
             }
         }
 
-        // Write to a temp file first (atomic replace)
         fs::path tmp = dst;
         tmp += ".tmp";
 
         {
             std::ofstream ofs(tmp, std::ios::binary | std::ios::trunc);
             if (!ofs.is_open()) {
-                return fail("Failed to open temp file for writing");
+                return fail(make_errno_message("Failed to open temp file for writing"));
             }
 
-            // Header
-            ofs << WindowRow::csv_header() << "\n";
+            ManifestHeader header = make_header(rows.size());
+            ofs.write(reinterpret_cast<const char*>(&header), sizeof(header));
             if (!ofs.good()) {
-                return fail("Failed while writing CSV header");
+                return fail(make_errno_message("Failed while writing manifest header"));
             }
 
-            // Rows
-            for (const auto& r : rows) {
-                ofs << r.to_csv_row() << "\n";
+            for (const auto& row : rows) {
+                write_row(ofs, row);
                 if (!ofs.good()) {
-                    return fail("Failed while writing CSV row");
+                    return fail(make_errno_message("Failed while writing manifest row"));
                 }
             }
 
             ofs.flush();
             if (!ofs.good()) {
-                return fail("Failed to flush CSV to disk");
+                return fail(make_errno_message("Failed to flush manifest to disk"));
             }
         }
 
-        // Atomically replace destination
         std::error_code ec;
         fs::rename(tmp, dst, ec);
         if (ec) {
-            // If atomic rename across devices fails, fall back to copy+replace
             fs::copy_file(tmp, dst, fs::copy_options::overwrite_existing, ec);
             if (ec) {
-                if (error_msg) {
-                    std::ostringstream oss;
-                    oss << "Failed to move temp file into place: " << ec.message();
-                    *error_msg = oss.str();
-                }
-                // Best effort: try to remove temp file
-                std::error_code ec2;
-                fs::remove(tmp, ec2);
-                return false;
+                std::error_code copy_ec = ec;
+                fs::remove(tmp, ec);
+                return fail("Failed to move temp file into place: " + copy_ec.message());
             }
-            // Remove temp file after successful copy
-            std::error_code ec2;
-            fs::remove(tmp, ec2);
+            fs::remove(tmp, ec);
         }
 
         if (error_msg) {
             error_msg->clear();
         }
         return true;
-
     } catch (const std::exception& ex) {
-        if (error_msg) {
-            *error_msg = std::string("Exception in write_windows_manifest_csv: ") + ex.what();
-        }
-        return false;
+        return fail(std::string("Exception in write_windows_manifest_parquet: ") + ex.what());
     }
+}
 
+bool append_windows_manifest_parquet(const std::string& path,
+                                     const WindowRow& row,
+                                     std::string* error_msg) {
+    return append_windows_manifest_parquet_batch(path, {row}, error_msg);
+}
 
-    }
-bool append_windows_manifest_csv(const std::string& path,
-                                 const WindowRow& row,
-                                 std::string* error_msg) {
+bool append_windows_manifest_parquet_batch(const std::string& path,
+                                           const std::vector<WindowRow>& rows,
+                                           std::string* error_msg) {
     namespace fs = std::filesystem;
 
-    auto fail = [&](const char* what) -> bool {
+    auto fail = [&](const std::string& message) -> bool {
         if (error_msg) {
-            std::ostringstream oss;
-            oss << what << ": " << std::strerror(errno);
-            *error_msg = oss.str();
+            *error_msg = message;
         }
         return false;
     };
 
+    if (rows.empty()) {
+        if (error_msg) {
+            error_msg->clear();
+        }
+        return true;
+    }
+
     try {
         fs::path dst(path);
-
-        // Ensure parent directory exists
         if (dst.has_parent_path()) {
             std::error_code ec;
             fs::create_directories(dst.parent_path(), ec);
             if (ec) {
-                if (error_msg) {
-                    std::ostringstream oss;
-                    oss << "Failed to create directory '" << dst.parent_path().string()
-                        << "': " << ec.message();
-                    *error_msg = oss.str();
-                }
-                return false;
+                return fail("Failed to create directory '" + dst.parent_path().string() + "': " + ec.message());
             }
         }
 
-        // Determine if we need to write the header (new or empty file)
-        bool write_header = false;
         if (!fs::exists(dst)) {
-            write_header = true;
-        } else {
-            std::error_code ec;
-            auto sz = fs::file_size(dst, ec);
-            write_header = ec ? true : (sz == 0);
+            return write_windows_manifest_parquet(path, rows, error_msg);
         }
 
-        std::ofstream ofs(dst, std::ios::binary | std::ios::app);
-        if (!ofs.is_open()) {
-            return fail("Failed to open file for appending");
+        std::fstream stream(dst, std::ios::binary | std::ios::in | std::ios::out);
+        if (!stream.is_open()) {
+            return fail(make_errno_message("Failed to open manifest for appending"));
         }
 
-        if (write_header) {
-            ofs << WindowRow::csv_header() << "\n";
-            if (!ofs.good()) {
-                return fail("Failed while writing CSV header");
+        ManifestHeader header{};
+        stream.read(reinterpret_cast<char*>(&header), sizeof(header));
+        if (!stream.good() || !validate_header(header)) {
+            return fail("Invalid manifest header when appending: " + dst.string());
+        }
+
+        stream.seekp(0, std::ios::end);
+        if (!stream.good()) {
+            return fail(make_errno_message("Failed to seek to end of manifest"));
+        }
+
+        for (const auto& row : rows) {
+            write_row(stream, row);
+            if (!stream.good()) {
+                return fail(make_errno_message("Failed while appending manifest row"));
             }
         }
 
-        ofs << row.to_csv_row() << "\n";
-        if (!ofs.good()) {
-            return fail("Failed while writing CSV row");
+        header.row_count += rows.size();
+        stream.seekp(0, std::ios::beg);
+        if (!stream.good()) {
+            return fail(make_errno_message("Failed to seek to manifest header"));
+        }
+        stream.write(reinterpret_cast<const char*>(&header), sizeof(header));
+        if (!stream.good()) {
+            return fail(make_errno_message("Failed while updating manifest header"));
+        }
+        stream.flush();
+        if (!stream.good()) {
+            return fail(make_errno_message("Failed to flush appended manifest"));
         }
 
-        ofs.flush();
-        if (!ofs.good()) {
-            return fail("Failed to flush CSV to disk");
-        }
-
-        if (error_msg) error_msg->clear();
-        return true;
-
-    } catch (const std::exception& ex) {
         if (error_msg) {
-            *error_msg = std::string("Exception in append_windows_manifest_csv: ") + ex.what();
+            error_msg->clear();
         }
-        return false;
+        return true;
+    } catch (const std::exception& ex) {
+        return fail(std::string("Exception in append_windows_manifest_parquet_batch: ") + ex.what());
     }
 }
 
-bool append_windows_manifest_csv_batch(const std::string& path,
-                                       const std::vector<WindowRow>& rows,
-                                       std::string* error_msg) {
-    namespace fs = std::filesystem;
-
-    auto fail = [&](const char* what) -> bool {
+bool read_windows_manifest_parquet(const std::string& path,
+                                   std::vector<WindowRow>* rows,
+                                   std::string* error_msg) {
+    auto fail = [&](const std::string& message) -> bool {
         if (error_msg) {
-            std::ostringstream oss;
-            oss << what << ": " << std::strerror(errno);
-            *error_msg = oss.str();
+            *error_msg = message;
         }
         return false;
     };
 
+    if (!rows) {
+        return fail("rows pointer cannot be null");
+    }
+
     try {
-        fs::path dst(path);
+        std::ifstream ifs(path, std::ios::binary);
+        if (!ifs.is_open()) {
+            return fail(make_errno_message("Failed to open manifest for reading"));
+        }
 
-        // Ensure parent directory exists
-        if (dst.has_parent_path()) {
-            std::error_code ec;
-            fs::create_directories(dst.parent_path(), ec);
-            if (ec) {
-                if (error_msg) {
-                    std::ostringstream oss;
-                    oss << "Failed to create directory '" << dst.parent_path().string()
-                        << "': " << ec.message();
-                    *error_msg = oss.str();
-                }
-                return false;
+        ManifestHeader header{};
+        ifs.read(reinterpret_cast<char*>(&header), sizeof(header));
+        if (!ifs.good() || !validate_header(header)) {
+            return fail("Invalid manifest header while reading: " + path);
+        }
+
+        rows->clear();
+        if (header.row_count > static_cast<std::uint64_t>(std::numeric_limits<std::size_t>::max())) {
+            return fail("Manifest row_count exceeds system capacity (SIZE_MAX)");
+        }
+        rows->reserve(static_cast<std::size_t>(header.row_count));
+
+        for (std::uint64_t i = 0; i < header.row_count; ++i) {
+            WindowRow row;
+            row.ticker.clear();
+            if (!read_row(ifs, &row)) {
+                return fail("Truncated manifest while reading rows: " + path);
             }
+            rows->push_back(std::move(row));
         }
 
-        // Determine if we need to write the header (new or empty file)
-        bool write_header = false;
-        if (!fs::exists(dst)) {
-            write_header = true;
-        } else {
-            std::error_code ec;
-            auto sz = fs::file_size(dst, ec);
-            write_header = ec ? true : (sz == 0);
-        }
-
-        std::ofstream ofs(dst, std::ios::binary | std::ios::app);
-        if (!ofs.is_open()) {
-            return fail("Failed to open file for appending");
-        }
-
-        if (write_header) {
-            ofs << WindowRow::csv_header() << "\n";
-            if (!ofs.good()) {
-                return fail("Failed while writing CSV header");
-            }
-        }
-
-        for (const auto& r : rows) {
-            ofs << r.to_csv_row() << "\n";
-            if (!ofs.good()) {
-                return fail("Failed while writing CSV row");
-            }
-        }
-
-        ofs.flush();
-        if (!ofs.good()) {
-            return fail("Failed to flush CSV to disk");
-        }
-
-        if (error_msg) error_msg->clear();
-        return true;
-
-    } catch (const std::exception& ex) {
         if (error_msg) {
-            *error_msg = std::string("Exception in append_windows_manifest_csv_batch: ") + ex.what();
+            error_msg->clear();
         }
-        return false;
+        return true;
+    } catch (const std::exception& ex) {
+        return fail(std::string("Exception in read_windows_manifest_parquet: ") + ex.what());
     }
 }
 
-} // namespace rivulet
+}  // namespace rivulet
+
