@@ -268,6 +268,9 @@ bool read_windows_manifest_parquet(const std::string& path,
         }
 
         rows->clear();
+        if (header.row_count > static_cast<std::uint64_t>(std::numeric_limits<std::size_t>::max())) {
+            return fail("Manifest row_count exceeds system capacity (SIZE_MAX)");
+        }
         rows->reserve(static_cast<std::size_t>(header.row_count));
 
         for (std::uint64_t i = 0; i < header.row_count; ++i) {
