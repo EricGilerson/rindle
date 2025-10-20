@@ -21,15 +21,15 @@
 #include "internal/driver.hpp"
 
 namespace rivulet {
-  bool build_and_write_manifest_csv(const WindowSpec& spec,
-                                    const std::string& manifest_csv_path,
-                                    std::string* error_msg) {
+  bool build_and_write_manifest_parquet(const WindowSpec& spec,
+                                        const std::string& manifest_path,
+                                        std::string* error_msg) {
     if (error_msg) *error_msg = {};
 
-    // Define a sink that appends each streamed row to the manifest CSV.
+    // Define a sink that appends each streamed row to the manifest file.
     // Return false only on I/O failure (so we don't stop early by design).
     auto sink = [&](const WindowRow& row) -> bool {
-      return append_windows_manifest_csv(manifest_csv_path, row, error_msg);
+      return append_windows_manifest_parquet(manifest_path, row, error_msg);
     };
 
     // Produce windows and push them directly to the sink.

@@ -12,7 +12,7 @@
     - Iterate tickers: read → window → write per-ticker outputs.
     - Handle error propagation and summary reporting.
     - Write manifest.json at the end with final counts and time mode.
-    - All outputs saved flat to output_dir: {ticker}_windows.csv, manifest.json
+    - All outputs saved flat to output_dir: {ticker}_windows.parquet, manifest.json
 
   Notes:
     - Keeps the control flow and logging in one place; no heavy logic inside.
@@ -24,7 +24,6 @@
 #include "internal/window_manifest.hpp"
 
 #include <iostream>
-#include <fstream>
 #include <filesystem>
 
 namespace rivulet {
@@ -151,11 +150,11 @@ bool Driver::process_ticker(
     stats.windows_created = windows.size();
     std::cout << "  Created " << windows.size() << " windows\n";
 
-    // Step 4: Write window manifest CSV - flat structure: {ticker}_windows.csv
+    // Step 4: Write window manifest parquet - flat structure: {ticker}_windows.parquet
     std::filesystem::path window_manifest_path =
-        config_.output_dir / (item.ticker + "_windows.csv");
+        config_.output_dir / (item.ticker + "_windows.parquet");
 
-    if (!write_windows_manifest_csv(window_manifest_path.string(), windows, &error_msg)) {
+    if (!write_windows_manifest_parquet(window_manifest_path.string(), windows, &error_msg)) {
         return false;
     }
 

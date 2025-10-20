@@ -9,8 +9,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <fstream>
-#include <sstream>
 #include <unordered_map>
 
 namespace rivulet {
@@ -102,7 +100,7 @@ Result<ManifestContent> build_dataset(const DatasetConfig& config) {
     //    - Read CSV
     //    - Make scalers
     //    - Build sliding windows
-    //    - Write window manifest CSV
+    //    - Write window manifest parquet
     // 3. Aggregate all ticker stats
     // 4. Build and write manifest.json
     DriverResult result = driver.run();
@@ -197,9 +195,9 @@ Result<Dataset> get_dataset(const ManifestContent& manifest_content) {
     for (const auto& ticker_stats : manifest_content.ticker_stats) {
         const std::string& ticker = ticker_stats.ticker;
 
-        // Path to this ticker's window manifest: output_dir/{ticker}_windows.csv
+        // Path to this ticker's window manifest: output_dir/{ticker}_windows.parquet
         std::filesystem::path window_manifest_path =
-            manifest_content.output_dir / (ticker + "_windows.csv");
+            manifest_content.output_dir / (ticker + "_windows.parquet");
 
         if (!std::filesystem::exists(window_manifest_path)) {
             return Result<Dataset>{
@@ -209,48 +207,18 @@ Result<Dataset> get_dataset(const ManifestContent& manifest_content) {
             };
         }
 
-        // Read window manifest CSV
-        std::ifstream manifest_file(window_manifest_path);
-        if (!manifest_file.is_open()) {
+        std::vector<WindowRow> ticker_windows;
+        if (!read_windows_manifest_parquet(window_manifest_path.string(), &ticker_windows, &error_msg)) {
             return Result<Dataset>{
                 std::nullopt,
-                Status::Error("Failed to open window manifest: " +
-                             window_manifest_path.string())
+                Status::Error("Failed to read window manifest: " +
+                             window_manifest_path.string() +
+                             (error_msg.empty() ? std::string() : (": " + error_msg)))
             };
         }
 
-        std::string line;
-        // Skip header
-        std::getline(manifest_file, line);
-
-        // Parse each window row
-        while (std::getline(manifest_file, line)) {
-            if (line.empty()) continue;
-
-            WindowRow row;
-            std::istringstream ss(line);
-            std::string cell;
-
-            // Parse CSV: ticker,window_start,window_end,target_start,target_end
-            std::getline(ss, cell, ',');
-            row.ticker = cell;
-
-            std::getline(ss, cell, ',');
-            row.window_start = std::stoll(cell);
-
-            std::getline(ss, cell, ',');
-            row.window_end = std::stoll(cell);
-
-            std::getline(ss, cell, ',');
-            if (!cell.empty()) {
-                row.target_start = std::stoll(cell);
-            }
-
-            std::getline(ss, cell, ',');
-            if (!cell.empty()) {
-                row.target_end = std::stoll(cell);
-            }
-
+        for (auto& row : ticker_windows) {
+            row.ticker = ticker;
             all_windows.push_back(row);
             total_windows++;
         }

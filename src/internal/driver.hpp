@@ -11,7 +11,7 @@
   Responsibilities:
     - Load configuration (seq_length, horizon, features, paths, time mode).
     - For each ticker: read → make windows → write outputs.
-    - Write window manifests as {ticker}_windows.csv in output_dir (flat structure).
+    - Write window manifests as {ticker}_windows.parquet in output_dir (flat structure).
     - Write the final manifest.json.
     - Emit a concise summary (row counts, window counts).
 
