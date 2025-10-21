@@ -88,7 +88,7 @@ target_include_directories(rindle
 )
 
 target_link_libraries(rindle
-        PRIVATE nlohmann_json::nlohmann_json
+        PUBLIC nlohmann_json::nlohmann_json
 )
 
 # Tests
