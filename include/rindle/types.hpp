@@ -33,6 +33,7 @@
 #include <optional>
 #include <filesystem>
 #include "dataset_types.hpp"
+#include "scaler.hpp"
 
 namespace rivulet {
 
@@ -98,6 +99,12 @@ namespace rivulet {
         std::size_t future_horizon;       // H: target horizon in rows
         TimeMode time_mode = TimeMode::UTC_NS;
         bool row_major = false;           // false = time-major flattening (default)
+        ScalerKind scaler_kind = ScalerKind::Standard;
+    };
+
+    struct FeatureScalerParams {
+        std::string feature;
+        ScalerParams params;
     };
 
     // Summary statistics for a ticker
@@ -107,6 +114,8 @@ namespace rivulet {
         std::size_t processed_rows = 0;
         std::size_t windows_created = 0;
         bool was_sorted = false;
+        ScalerKind scaler_kind = ScalerKind::None;
+        std::vector<FeatureScalerParams> feature_scalers;
     };
 
     // Work item for processing a single ticker

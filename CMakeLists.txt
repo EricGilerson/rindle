@@ -53,6 +53,7 @@ add_library(rindle STATIC
         # Public headers
         include/rindle/types.hpp
         include/rindle/dataset_types.hpp
+        include/rindle/scaler.hpp
         include/rindle.hpp
 
         # Private headers
