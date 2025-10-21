@@ -1,0 +1,46 @@
+Know the surfaces you need to expose
+
+- The public C++ entry points are `create_config`, `build_dataset`, and the two `get_dataset` overloads declared in `include/rindle.hpp`; they orchestrate configuration, dataset materialisation, and tensor loading. Any Python wrapper should centre on these three functions.
+
+- Supporting types that callers will expect to manipulate—`DatasetConfig`, `Result<T>`, `Status`, `TickerStats`, etc.—live in `include/rindle/types.hpp`. They are simple value types that map cleanly onto Python classes or dictionaries once you decide how to represent success/error signalling.
+
+- The data payloads you ultimately want to hand back to NumPy are described by `Tensor3D` and `Dataset` in `include/rindle/dataset_types.hpp`. `Tensor3D` stores a contiguous `std::vector<float>` laid out as `[window, sequence, feature]`, which is ideal for exposing as a NumPy `ndarray` without copying.
+
+- Manifest metadata (counts, scaler summaries per ticker, filesystem paths) is captured by `ManifestContent` in `include/rindle/manifest_types.hpp`. Python bindings should surface this so users can introspect dataset characteristics before loading tensors.
+
+Pick a binding toolkit and extend the build
+
+- Pybind11 is the pragmatic choice because it understands STL containers, `std::optional`, filesystem paths, enums, and can hand out NumPy views over existing memory. You can pull it in alongside the existing `FetchContent` usage in `CMakeLists.txt`, then add a new `MODULE` target (e.g., `rindle_python`) that links against the static `rindle` library already defined there.
+
+- Configure that module target with `pybind11::module` helpers, ensure it compiles as position-independent code, and set the correct output name (`rindle` or whatever import name you want). Keep the existing static library untouched so C++ consumers still link against it.
+
+Design your Python-facing API
+
+- Mirror the shape of `create_config`/`build_dataset`/`get_dataset`. In Python you likely want idiomatic functions that either return the raw structs or raise exceptions. Decide whether to expose the `Result<T>` container directly or convert unsuccessful results into `RuntimeError`s while returning the value on success. Mapping the `Status` message into exception text keeps the Python API clean.
+
+- Expose enums such as `TimeMode` and `ScalerKind` so Python callers can use symbolic names instead of raw integers.
+
+Return NumPy arrays without copies
+
+- Convert each `Tensor3D` inside `Dataset` into a `pybind11::array` (dtype `float32`) by creating a view over the underlying `std::vector<float>` buffer. Use `py::array` with a `shape = {X.windows, X.seq_len, X.features}` and `strides` that match the row-major layout described in `Tensor3D::offset`. Tie the array’s lifetime to the owning `Dataset` via a `py::capsule` so the memory stays valid while Python holds the array.
+
+- Package both feature (`X`) and target (`Y`) tensors this way. If the manifest indicates no targets, decide whether to return `None`, an empty array, or a structured object with optional fields.
+
+Make C++ objects first-class in Python
+
+- Wrap structs like `DatasetConfig`, `ManifestContent`, `TickerStats`, `WindowMeta`, and `FeatureScalerParams` as Python classes with read/write properties. Pybind11 can expose them with `.def_readwrite` or property accessors, ensuring values round-trip cleanly between Python and C++.
+
+- For heavier classes (e.g., anything with behaviour rather than just data), bind their constructors and methods so that Python can instantiate and manipulate them directly. If some types should remain opaque (internal `Driver`, `Catalog`, etc.), keep them unbound; only expose what the Python API needs.
+
+Handle filesystem and data interchange concerns
+
+- Pybind11 already understands `std::filesystem::path`, so arguments such as `input_dir`/`output_dir` flow naturally between Python `pathlib.Path` objects and C++.
+
+- For JSON-related utilities (`ScalerStore::to_json`, etc.), decide whether to return Python strings, `dict`s (by parsing with `nlohmann::json` and handing the result to Python), or to leave those helpers unbound until needed.
+
+Package and distribute
+
+- Once the module builds, add a `pyproject.toml`/`setup.cfg` that compiles the pybind11 extension, installs the shared library, and optionally bundles headers if you expect downstream C++/Python hybrids.
+- Document the expected workflow: call `create_config`, optionally inspect `ManifestContent`, then `build_dataset`, and finally `get_dataset` to receive NumPy tensors plus metadata. Keep parity with the C++ semantics so both ecosystems remain aligned.
+
+Following the steps above gives you a Python module that (1) reuses the existing C++ implementation, (2) exposes your structs and enums natively, and (3) hands back zero-copy NumPy arrays for model training.
