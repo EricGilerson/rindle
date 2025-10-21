@@ -16,10 +16,12 @@
 ==============================================================================*/
 
 #include "internal/manifest.hpp"
+#include "internal/scaler.hpp"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <utility>
 
 namespace rivulet {
 
@@ -36,6 +38,7 @@ namespace rivulet {
     content_.target_column = config.target_column;
     content_.time_mode = config.time_mode;
     content_.row_major = config.row_major;
+    content_.scaler_kind = config.scaler_kind;
     content_.total_tickers = catalog.work_items().size();
     content_.total_windows = catalog.total_windows_created();
     content_.total_input_rows = catalog.total_rows_processed();
@@ -125,6 +128,7 @@ namespace rivulet {
     // Serialize TimeMode enum
     j["time_mode"] = (content_.time_mode == TimeMode::UTC_NS) ? "UTC_NS" : "ORDINAL";
     j["row_major"] = content_.row_major;
+    j["scaler"] = scaler_kind_to_string(content_.scaler_kind);
 
     // Statistics
     j["total_tickers"] = content_.total_tickers;
@@ -137,8 +141,19 @@ namespace rivulet {
       json stats_obj;
       stats_obj["ticker"] = stats.ticker;
       stats_obj["input_rows"] = stats.input_rows;
+      stats_obj["processed_rows"] = stats.processed_rows;
       stats_obj["windows_created"] = stats.windows_created;
       stats_obj["was_sorted"] = stats.was_sorted;
+      stats_obj["scaler_kind"] = scaler_kind_to_string(stats.scaler_kind);
+
+      json feature_scalers = json::array();
+      for (const auto& feature_params : stats.feature_scalers) {
+        json feature_obj;
+        feature_obj["feature"] = feature_params.feature;
+        feature_obj["params"] = scaler_params_to_json(feature_params.params);
+        feature_scalers.push_back(std::move(feature_obj));
+      }
+      stats_obj["feature_scalers"] = feature_scalers;
       ticker_stats_array.push_back(stats_obj);
     }
     j["ticker_stats"] = ticker_stats_array;
@@ -176,6 +191,12 @@ namespace rivulet {
       manifest.content_.time_mode = (time_mode_str == "UTC_NS") ? TimeMode::UTC_NS : TimeMode::ORDINAL;
 
       manifest.content_.row_major = j.at("row_major").get<bool>();
+      if (j.contains("scaler")) {
+        auto scaler_opt = scaler_kind_from_string(j.at("scaler").get<std::string>());
+        manifest.content_.scaler_kind = scaler_opt.value_or(ScalerKind::None);
+      } else {
+        manifest.content_.scaler_kind = ScalerKind::None;
+      }
 
       // Statistics
       manifest.content_.total_tickers = j.at("total_tickers").get<std::size_t>();
@@ -190,8 +211,27 @@ namespace rivulet {
           TickerStats stats;
           stats.ticker = stats_json.at("ticker").get<std::string>();
           stats.input_rows = stats_json.at("input_rows").get<std::size_t>();
+          if (stats_json.contains("processed_rows")) {
+            stats.processed_rows = stats_json.at("processed_rows").get<std::size_t>();
+          } else {
+            stats.processed_rows = stats.input_rows;
+          }
           stats.windows_created = stats_json.at("windows_created").get<std::size_t>();
           stats.was_sorted = stats_json.at("was_sorted").get<bool>();
+          if (stats_json.contains("scaler_kind")) {
+            auto scaler_opt = scaler_kind_from_string(stats_json.at("scaler_kind").get<std::string>());
+            stats.scaler_kind = scaler_opt.value_or(manifest.content_.scaler_kind);
+          } else {
+            stats.scaler_kind = manifest.content_.scaler_kind;
+          }
+          if (stats_json.contains("feature_scalers") && stats_json["feature_scalers"].is_array()) {
+            for (const auto& feature_json : stats_json["feature_scalers"]) {
+              FeatureScalerParams params;
+              params.feature = feature_json.at("feature").get<std::string>();
+              params.params = scaler_params_from_json(feature_json.at("params"));
+              stats.feature_scalers.push_back(std::move(params));
+            }
+          }
           manifest.content_.ticker_stats.push_back(stats);
         }
       }

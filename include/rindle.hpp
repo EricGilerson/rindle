@@ -34,6 +34,7 @@ namespace rivulet {
  * @param target_column Optional target column name (nullopt for unsupervised)
  * @param time_mode UTC_NS for timestamp-based, ORDINAL for row-index based
  * @param row_major Flatten order: false = time-major [W,S,F], true = row-major
+ * @param scaler_kind Scaler applied to numeric features prior to windowing
  * @return Result containing DatasetConfig or error status
  */
 Result<DatasetConfig> create_config(
@@ -44,7 +45,8 @@ Result<DatasetConfig> create_config(
     std::size_t future_horizon,
     const std::optional<std::string>& target_column = std::nullopt,
     TimeMode time_mode = TimeMode::UTC_NS,
-    bool row_major = false
+    bool row_major = false,
+    ScalerKind scaler_kind = ScalerKind::Standard
 );
 
 /**

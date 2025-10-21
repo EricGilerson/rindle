@@ -22,6 +22,7 @@
 #include "internal/driver.hpp"
 #include "internal/csv_io.hpp"
 #include "internal/window_manifest.hpp"
+#include "internal/scaler.hpp"
 
 #include <iostream>
 #include <filesystem>
@@ -127,6 +128,21 @@ bool Driver::process_ticker(
     stats.input_rows = num_rows;
     stats.processed_rows = num_rows;  // No cleaning, so all rows are processed
     stats.was_sorted = false;         // Assuming input is already sorted
+    stats.scaler_kind = config_.scaler_kind;
+
+    if (frame.features.size() == frame.feature_names.size()) {
+        stats.feature_scalers.reserve(frame.feature_names.size());
+        for (std::size_t i = 0; i < frame.feature_names.size(); ++i) {
+            auto scaler = make_scaler(config_.scaler_kind);
+            std::vector<double> column = frame.features[i];
+            scaler->fit(column);
+
+            FeatureScalerParams feature_params;
+            feature_params.feature = frame.feature_names[i];
+            feature_params.params = scaler->params();
+            stats.feature_scalers.push_back(std::move(feature_params));
+        }
+    }
 
     // Step 3: Build windows using window_maker
     SingleTickerWindowSpec window_spec;

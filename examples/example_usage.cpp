@@ -47,7 +47,8 @@ int main() {
         1,                                       // future_horizon (H)
         "Delta_Close",                           // target_column
         TimeMode::UTC_NS,                        // time_mode
-        false                                    // row_major
+        false,                                   // row_major
+        ScalerKind::Standard                     // scaler_kind applied to features
     );
 
     if (!config_result) {
@@ -76,6 +77,7 @@ int main() {
     cout << "  Total tickers: " << manifest.total_tickers << "\n";
     cout << "  Total windows: " << manifest.total_windows << "\n";
     cout << "  Total input rows: " << manifest.total_input_rows << "\n";
+    cout << "  Feature scaler: " << scaler_kind_to_string(manifest.scaler_kind) << "\n";
 
     //==========================================================================
     // Step 3: Get dataset tensors (loads actual data into memory)

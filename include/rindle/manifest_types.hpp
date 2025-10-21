@@ -24,6 +24,7 @@ struct ManifestContent {
     std::optional<std::string> target_column;
     TimeMode time_mode{TimeMode::UTC_NS};
     bool row_major{false};
+    ScalerKind scaler_kind{ScalerKind::None};
 
     // Statistics
     std::size_t total_tickers{};

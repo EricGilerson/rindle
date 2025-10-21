@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <cctype>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace rivulet {
 
@@ -23,7 +25,8 @@ Result<DatasetConfig> create_config(
     std::size_t future_horizon,
     const std::optional<std::string>& target_column,
     TimeMode time_mode,
-    bool row_major
+    bool row_major,
+    ScalerKind scaler_kind
 ) {
     // Validate inputs
     if (!std::filesystem::exists(input_dir)) {
@@ -81,6 +84,7 @@ Result<DatasetConfig> create_config(
     config.future_horizon = future_horizon;
     config.time_mode = time_mode;
     config.row_major = row_major;
+    config.scaler_kind = scaler_kind;
 
     return Result<DatasetConfig>{
         config,
@@ -165,6 +169,43 @@ Result<Dataset> get_dataset(const ManifestContent& manifest_content) {
 
     // Cache for loaded CSV data (ticker -> CsvFrame)
     std::unordered_map<std::string, CsvFrame> csv_cache;
+    std::unordered_map<std::string, std::vector<ScalerParams>> ticker_scaler_params;
+    std::string scaler_error;
+
+    auto fetch_scalers_for_ticker = [&](const std::string& ticker)
+        -> const std::vector<ScalerParams>* {
+        auto existing = ticker_scaler_params.find(ticker);
+        if (existing != ticker_scaler_params.end()) {
+            return &existing->second;
+        }
+
+        const TickerStats* stats = manifest_content.find_stats(ticker);
+        if (!stats) {
+            scaler_error = "Scaler parameters missing for ticker: " + ticker;
+            return nullptr;
+        }
+
+        std::unordered_map<std::string, const ScalerParams*> feature_lookup;
+        feature_lookup.reserve(stats->feature_scalers.size());
+        for (const auto& feature_params : stats->feature_scalers) {
+            feature_lookup.emplace(feature_params.feature, &feature_params.params);
+        }
+
+        std::vector<ScalerParams> ordered_params;
+        ordered_params.reserve(n_features);
+        for (const auto& feature_name : manifest_content.feature_columns) {
+            auto feature_it = feature_lookup.find(feature_name);
+            if (feature_it == feature_lookup.end()) {
+                scaler_error = "Scaler parameters missing for feature '" + feature_name +
+                               "' in ticker " + ticker;
+                return nullptr;
+            }
+            ordered_params.push_back(*feature_it->second);
+        }
+
+        auto inserted = ticker_scaler_params.emplace(ticker, std::move(ordered_params));
+        return &inserted.first->second;
+    };
 
     // Build lookup map from normalized ticker -> input CSV path
     auto normalize_ticker = [](const std::filesystem::path& path) {
@@ -288,10 +329,18 @@ Result<Dataset> get_dataset(const ManifestContent& manifest_content) {
             };
         }
         
+        const auto* scaler_params = fetch_scalers_for_ticker(window_row.ticker);
+        if (!scaler_params) {
+            return Result<Dataset>{
+                std::nullopt,
+                Status::Error(scaler_error)
+            };
+        }
+
         // Fill X tensor: extract window_start to window_end
         for (std::int64_t s = 0; s < static_cast<std::int64_t>(seq_len); ++s) {
             std::int64_t row_idx = window_row.window_start + s;
-            
+
             for (std::size_t f = 0; f < n_features; ++f) {
                 // Find the feature column index in the CSV
                 const std::string& feature_name = manifest_content.feature_columns[f];
@@ -305,11 +354,11 @@ Result<Dataset> get_dataset(const ManifestContent& manifest_content) {
                         Status::Error("Feature column not found in CSV: " + feature_name)
                     };
                 }
-                
+
                 std::size_t csv_col_idx = std::distance(frame.feature_names.begin(), it);
                 double value = frame.features[csv_col_idx][row_idx];
-                
-                dataset.X.at(w, s, f) = static_cast<float>(value);
+                double scaled_value = apply_scaler_value(value, (*scaler_params)[f]);
+                dataset.X.at(w, s, f) = static_cast<float>(scaled_value);
             }
         }
         
