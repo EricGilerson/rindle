@@ -111,23 +111,48 @@ The Python package re-exports the compiled module, exposes a version sourced
 from package metadata, and keeps the import path as `import rindle` for existing
 scripts.【F:python/rindle/__init__.py†L1-L23】
 
-Build and install a wheel locally with pip:
+### Install into a local Python environment
 
-```bash
-pip install .
-```
+1. **Create (optional) and activate a virtual environment** to keep dependencies
+   isolated. Any virtual environment manager works; for the built-in `venv`
+   module:
 
-For distribution, create a wheel and publish it to an index:
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows use `.venv\Scripts\activate`
+   ```
 
-```bash
-python -m build
-twine upload dist/*
-```
+2. **Install build prerequisites** if you have not already. `pip` can compile
+   the extension as long as CMake and a C++20 compiler are available on your
+   `PATH`. Installing `build` and `wheel` provides helpful tooling:
 
-Both commands honour the CMake options in the project file; tests and examples
-are disabled automatically during wheel builds to keep artifacts minimal while
-still compiling the Python bindings.【F:pyproject.toml†L42-L45】
+   ```bash
+   pip install --upgrade pip
+   pip install build wheel
+   ```
 
+3. **Install Rindle into the environment**. From the repository root run:
+
+   ```bash
+   pip install .
+   ```
+
+   This command builds the extension with scikit-build-core, installs the
+   resulting wheel into the active environment, and exposes `import rindle`.
+
+4. **(Optional) Editable install for iterative development.** If you intend to
+   iterate on the bindings, install in editable mode so Python resolves the
+   module from your working tree while still compiling the extension as needed:
+
+   ```bash
+   pip install --editable .
+   ```
+
+5. **Verify the install** by importing the package and checking the version:
+
+   ```bash
+   python -c "import rindle; print(rindle.__version__)"
+   ```
 ## Examples
 
 The `examples` directory contains runnable demonstrations for both languages:
