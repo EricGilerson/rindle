@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.22)
 project(rindle LANGUAGES CXX)
 
+include(GNUInstallDirs)
+
 # Default to Release unless the user sets something else
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -134,4 +136,11 @@ if(RINDLE_BUILD_PYTHON)
     target_link_libraries(rindle_python PRIVATE rindle)
     target_include_directories(rindle_python PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
     set_target_properties(rindle_python PROPERTIES OUTPUT_NAME "rindle")
+
+    install(
+            TARGETS rindle_python
+            LIBRARY DESTINATION rindle
+            ARCHIVE DESTINATION rindle
+            RUNTIME DESTINATION rindle
+    )
 endif()
