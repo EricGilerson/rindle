@@ -41,6 +41,19 @@ namespace rivulet {
         std::optional<double> clip_hi;
     };
 
+    class FittedScaler {
+    public:
+        FittedScaler() = default;
+        explicit FittedScaler(ScalerParams params);
+
+        double transform(double value) const;
+        double inverse_transform(double value) const;
+        const ScalerParams& params() const;
+
+    private:
+        ScalerParams params_{};
+    };
+
     class Scaler {
     public:
         virtual ~Scaler() = default;
@@ -89,6 +102,10 @@ namespace rivulet {
     ScalerParams scaler_params_from_json(const nlohmann::json& json);
 
     double apply_scaler_value(double value, const ScalerParams& params);
+
+    double inverse_apply_scaler_value(double value, const ScalerParams& params);
+
+    double inverse_transform_value(const FittedScaler& scaler, double value);
 
 } // namespace rivulet
 

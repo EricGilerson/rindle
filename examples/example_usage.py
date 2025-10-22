@@ -68,6 +68,13 @@ def main() -> None:
         first_target = float(Y[0, 0, 0])
         print(f"  First Y value: {first_target}")
 
+    if dataset.meta and manifest.feature_columns:
+        first_ticker = dataset.meta[0].ticker
+        first_feature = manifest.feature_columns[0]
+        scaler = rindle.get_feature_scaler(manifest, first_ticker, first_feature)
+        original = rindle.inverse_transform_value(scaler, float(X[0, 0, 0]))
+        print(f"  Inverse-transformed first X value: {original}")
+
     print_last_x_sequence(dataset)
 
 

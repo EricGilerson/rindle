@@ -98,6 +98,18 @@ PYBIND11_MODULE(rindle, m) {
         .def_readwrite("clip_lo", &rv::ScalerParams::clip_lo)
         .def_readwrite("clip_hi", &rv::ScalerParams::clip_hi);
 
+    py::class_<rv::FittedScaler>(m, "FittedScaler")
+        .def(py::init<>())
+        .def("transform", &rv::FittedScaler::transform, py::arg("value"))
+        .def("inverse_transform", &rv::FittedScaler::inverse_transform, py::arg("value"))
+        .def_property_readonly(
+            "params",
+            [](const rv::FittedScaler& self) {
+                return self.params();
+            },
+            py::return_value_policy::copy
+        );
+
     py::class_<rv::FeatureScalerParams>(m, "FeatureScalerParams")
         .def(py::init<>())
         .def_readwrite("feature", &rv::FeatureScalerParams::feature)
@@ -237,5 +249,47 @@ PYBIND11_MODULE(rindle, m) {
         },
         py::arg("manifest_path"),
         "Load dataset tensors from a manifest file path"
+    );
+
+    m.def(
+        "get_feature_scaler",
+        [](const rv::ManifestContent& manifest,
+           const std::string& ticker,
+           const std::string& feature) {
+            return unwrap(
+                rv::get_feature_scaler(manifest, ticker, feature),
+                "get_feature_scaler"
+            );
+        },
+        py::arg("manifest"),
+        py::arg("ticker"),
+        py::arg("feature"),
+        "Fetch a fitted scaler for a ticker/feature pair from an in-memory manifest"
+    );
+
+    m.def(
+        "get_feature_scaler",
+        [](const std::filesystem::path& manifest_path,
+           const std::string& ticker,
+           const std::string& feature) {
+            return unwrap(
+                rv::get_feature_scaler(manifest_path, ticker, feature),
+                "get_feature_scaler"
+            );
+        },
+        py::arg("manifest_path"),
+        py::arg("ticker"),
+        py::arg("feature"),
+        "Fetch a fitted scaler for a ticker/feature pair by reading manifest.json"
+    );
+
+    m.def(
+        "inverse_transform_value",
+        [](const rv::FittedScaler& scaler, double value) {
+            return rv::inverse_transform_value(scaler, value);
+        },
+        py::arg("scaler"),
+        py::arg("value"),
+        "Invert a scaled value using the fitted scaler"
     );
 }

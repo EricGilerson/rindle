@@ -497,6 +497,60 @@ double apply_scaler_value(double value, const ScalerParams& params) {
     }
 }
 
+double inverse_apply_scaler_value(double value, const ScalerParams& params) {
+    if (!std::isfinite(value)) {
+        return value;
+    }
+
+    switch (params.kind) {
+        case ScalerKind::None:
+            return value;
+        case ScalerKind::Standard: {
+            const double denom = safe_denominator_value(params.stats.std);
+            return (value * denom) + params.stats.mean;
+        }
+        case ScalerKind::ZeroStandard: {
+            const double denom = safe_denominator_value(params.stats.std);
+            return value * denom;
+        }
+        case ScalerKind::LogStandard: {
+            const double denom = safe_denominator_value(params.stats.std);
+            const double restored = (value * denom) + params.stats.mean;
+            return std::expm1(restored);
+        }
+        case ScalerKind::MinMax: {
+            const double range = params.stats.max - params.stats.min;
+            const double denom = safe_denominator_value(range);
+            return (value * denom) + params.stats.min;
+        }
+        case ScalerKind::Robust: {
+            const double denom = safe_denominator_value(params.stats.iqr);
+            return (value * denom) + params.stats.median;
+        }
+        default:
+            return value;
+    }
+}
+
+FittedScaler::FittedScaler(ScalerParams params)
+    : params_(std::move(params)) {}
+
+double FittedScaler::transform(double value) const {
+    return apply_scaler_value(value, params_);
+}
+
+double FittedScaler::inverse_transform(double value) const {
+    return inverse_apply_scaler_value(value, params_);
+}
+
+const ScalerParams& FittedScaler::params() const {
+    return params_;
+}
+
+double inverse_transform_value(const FittedScaler& scaler, double value) {
+    return scaler.inverse_transform(value);
+}
+
 std::string ScalerStore::to_json() const {
     nlohmann::json arr = nlohmann::json::array();
     for (const auto& [column, params] : by_column) {

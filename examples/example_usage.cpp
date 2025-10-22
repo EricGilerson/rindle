@@ -111,6 +111,20 @@ int main() {
         cout << "  First Y value: " << first_target << "\n";
     }
 
+    if (!dataset.meta.empty() && !manifest.feature_columns.empty()) {
+        const std::string& first_ticker = dataset.meta.front().ticker;
+        const std::string& first_feature = manifest.feature_columns.front();
+        auto scaler_result = get_feature_scaler(manifest, first_ticker, first_feature);
+        if (scaler_result) {
+            double scaled = static_cast<double>(dataset.X.at(0, 0, 0));
+            double original = inverse_transform_value(*scaler_result.value, scaled);
+            cout << "  Inverse-transformed first X value: " << original << "\n";
+        } else {
+            cout << "  Could not fetch scaler for inverse transform: "
+                 << scaler_result.status.message << "\n";
+        }
+    }
+
     //==========================================================================
     // New: Print the last X window/sequence
     //==========================================================================

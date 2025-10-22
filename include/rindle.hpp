@@ -89,6 +89,20 @@ Result<Dataset> get_dataset(
     const std::filesystem::path& manifest_path
 );
 
+Result<FittedScaler> get_feature_scaler(
+    const ManifestContent& manifest,
+    const std::string& ticker,
+    const std::string& feature
+);
+
+Result<FittedScaler> get_feature_scaler(
+    const std::filesystem::path& manifest_path,
+    const std::string& ticker,
+    const std::string& feature
+);
+
+double inverse_transform_value(const FittedScaler& scaler, double value);
+
 } // namespace rivulet
 
 #endif // RIVULET_HPP

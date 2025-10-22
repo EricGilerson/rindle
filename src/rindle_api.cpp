@@ -404,16 +404,70 @@ Result<Dataset> get_dataset(const ManifestContent& manifest_content) {
 Result<Dataset> get_dataset(const std::filesystem::path& manifest_path) {
     // Load manifest from file
     auto manifest_result = Manifest::read_from_file(manifest_path);
-    
+
     if (!manifest_result) {
         return Result<Dataset>{
             std::nullopt,
             manifest_result.status
         };
     }
-    
+
     // Delegate to the in-memory version
     return get_dataset(manifest_result.value->content());
+}
+
+Result<FittedScaler> get_feature_scaler(
+    const ManifestContent& manifest,
+    const std::string& ticker,
+    const std::string& feature
+) {
+    const TickerStats* stats = manifest.find_stats(ticker);
+    if (!stats) {
+        return Result<FittedScaler>{
+            std::nullopt,
+            Status::Error("Ticker not found in manifest: " + ticker)
+        };
+    }
+
+    auto feature_it = std::find_if(
+        stats->feature_scalers.begin(),
+        stats->feature_scalers.end(),
+        [&](const FeatureScalerParams& params) {
+            return params.feature == feature;
+        }
+    );
+
+    if (feature_it == stats->feature_scalers.end()) {
+        return Result<FittedScaler>{
+            std::nullopt,
+            Status::Error(
+                "Scaler parameters not found for feature '" + feature +
+                "' in ticker " + ticker
+            )
+        };
+    }
+
+    return Result<FittedScaler>{
+        FittedScaler(feature_it->params),
+        Status::OK()
+    };
+}
+
+Result<FittedScaler> get_feature_scaler(
+    const std::filesystem::path& manifest_path,
+    const std::string& ticker,
+    const std::string& feature
+) {
+    auto manifest_result = Manifest::read_from_file(manifest_path);
+    if (!manifest_result) {
+        return Result<FittedScaler>{
+            std::nullopt,
+            manifest_result.status
+        };
+    }
+
+    const Manifest& manifest_obj = manifest_result.value.value();
+    return get_feature_scaler(manifest_obj.content(), ticker, feature);
 }
 
 } // namespace rivulet
