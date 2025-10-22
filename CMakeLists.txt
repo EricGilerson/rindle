@@ -16,6 +16,7 @@ option(RINDLE_ENABLE_WARNINGS "Enable strict warnings" ON)
 option(RINDLE_ENABLE_ASAN "Enable AddressSanitizer in Debug" ON)
 option(RINDLE_BUILD_TESTS "Build unit tests" ON)
 option(RINDLE_BUILD_EXAMPLES "Build example executables" ON)
+option(RINDLE_BUILD_PYTHON "Build Python bindings" ON)
 
 # Warnings (Clang/GCC/MSVC)
 if(RINDLE_ENABLE_WARNINGS)
@@ -91,6 +92,8 @@ target_link_libraries(rindle
         PUBLIC nlohmann_json::nlohmann_json
 )
 
+set_target_properties(rindle PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 # Tests
 if(RINDLE_BUILD_TESTS)
     FetchContent_Declare(
@@ -113,4 +116,22 @@ endif()
 if(RINDLE_BUILD_EXAMPLES)
     add_executable(example_usage examples/example_usage.cpp)
     target_link_libraries(example_usage PRIVATE rindle)
+endif()
+
+
+if(RINDLE_BUILD_PYTHON)
+    FetchContent_Declare(
+            pybind11
+            GIT_REPOSITORY https://github.com/pybind/pybind11.git
+            GIT_TAG v2.12.0
+    )
+    FetchContent_MakeAvailable(pybind11)
+
+    pybind11_add_module(rindle_python MODULE
+            src/python/bindings.cpp
+    )
+
+    target_link_libraries(rindle_python PRIVATE rindle)
+    target_include_directories(rindle_python PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    set_target_properties(rindle_python PROPERTIES OUTPUT_NAME "rindle")
 endif()
