@@ -12,7 +12,7 @@ version = "0.1.0"
 description = "Dataset preparation library with Python bindings for sliding window tensors"
 readme = "readme.md"
 requires-python = ">=3.9"
-authors = [{ name = "Rindle Developers" }]
+authors = [{ name = "Eric Gilerson" }]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Programming Language :: Python",
@@ -24,7 +24,8 @@ classifiers = [
 dependencies = [
     "numpy>=1.23",
 ]
-
+[project.urls]
+Homepage = "https://github.com/EricGilerson/rindle"
 [project.optional-dependencies]
 dev = [
     "scikit-build-core>=0.5",

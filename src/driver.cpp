@@ -20,7 +20,7 @@ Overview:
 #include "internal/driver.hpp"
 #include "internal/csv_io.hpp"
 #include "internal/window_manifest.hpp"
-#include "internal/scaler.hpp"
+#include "rindle/scaler.hpp"
 
 #include <iostream>
 #include <filesystem>

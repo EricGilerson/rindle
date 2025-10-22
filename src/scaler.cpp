@@ -1,4 +1,4 @@
-#include "internal/scaler.hpp"
+#include "rindle/scaler.hpp"
 
 #include <algorithm>
 #include <cmath>

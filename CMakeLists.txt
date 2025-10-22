@@ -60,7 +60,6 @@ add_library(rindle STATIC
         include/rindle.hpp
 
         # Private headers
-        src/internal/scaler.hpp
         src/internal/csv_io.hpp
         src/internal/manifest.hpp
         src/internal/window_maker.hpp

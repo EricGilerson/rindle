@@ -16,7 +16,7 @@ Key functionality:
 ==============================================================================*/
 
 #include "internal/manifest.hpp"
-#include "internal/scaler.hpp"
+#include "rindle/scaler.hpp"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <iomanip>
