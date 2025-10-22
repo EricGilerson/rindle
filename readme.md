@@ -62,6 +62,11 @@ parameters alongside the manifest:
   is stored in the dataset configuration and manifest.
 * `ScalerStore` serializes the per-feature statistics to JSON for reuse, and CSV
   helpers exist to persist or reload artifact bundles if needed.
+* `get_feature_scaler` returns a `FittedScaler` for a ticker/feature pair using
+  either an in-memory manifest or a saved `manifest.json`. The scaler exposes
+  `transform`/`inverse_transform` helpers, and the convenience function
+  `inverse_transform_value` can recover the original numeric value from the
+  scaled tensors returned by `get_dataset`.
 
 ## Window generation
 
