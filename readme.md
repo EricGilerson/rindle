@@ -1,5 +1,9 @@
 # Rindle
 
+[![PyPI Version](https://img.shields.io/pypi/v/rindle.svg)](https://pypi.org/project/rindle/)
+[![PyPI Downloads](https://img.shields.io/pypi/dm/rindle.svg)](https://pypi.org/project/rindle/)
+
+
 Rindle is a C++20 library for turning raw, per-ticker CSV files into training-ready
 datasets. It discovers input files, learns feature scalers, generates sliding
 windows, and produces both a manifest and contiguous tensors that can be consumed
@@ -18,6 +22,14 @@ from C++ or Python.
 The C++ API is mirrored in the optional Python bindings, enabling the same flow
 from notebooks or scripts.
 
+## Install (PyPI)
+
+Rindle’s Python package is published on PyPI as **rindle**.  
+Install with:
+
+```bash
+pip install rindle
+```
 ## Input expectations
 
 * Each ticker lives in its own CSV file inside the configured input directory.
@@ -169,10 +181,3 @@ The `examples` directory contains runnable demonstrations for both languages:
 
 Build the C++ example with the `RINDLE_BUILD_EXAMPLES` option and run the Python
 script after building the bindings.
-
-## Next steps
-
-The Catch2 harness in `tests/` is ready for assertions once real scenarios are
-added, and the window manifest writer currently produces a lightweight binary
-format that can later be swapped for an actual Parquet implementation without
-changing the public API.
