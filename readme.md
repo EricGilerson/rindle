@@ -8,15 +8,15 @@ from C++ or Python.
 ## High-level workflow
 
 1. **Configure** – call `rindle::create_config` to validate paths, select feature
-   columns, and choose window geometry and scaling options.【F:include/rindle.hpp†L23-L59】
+   columns, and choose window geometry and scaling options.
 2. **Build** – pass the configuration to `rindle::build_dataset`; the driver
    discovers tickers, fits scalers, writes window manifests, and emits
-   `manifest.json` summarizing the build.【F:src/driver.cpp†L19-L125】【F:include/rindle.hpp†L61-L67】
+   `manifest.json` summarizing the build.
 3. **Load** – use `rindle::get_dataset` with the manifest to materialize feature
-   and target tensors in memory for model training or analysis.【F:include/rindle.hpp†L69-L90】【F:src/rindle_api.cpp†L95-L169】
+   and target tensors in memory for model training or analysis.
 
 The C++ API is mirrored in the optional Python bindings, enabling the same flow
-from notebooks or scripts.【F:src/python/bindings.cpp†L97-L214】
+from notebooks or scripts.
 
 ## Input expectations
 
@@ -24,9 +24,9 @@ from notebooks or scripts.【F:src/python/bindings.cpp†L97-L214】
 * Files must include a header whose first column is `Date`; the remaining columns
   are treated as numeric features. Missing numeric values are parsed as
   `NaN` and timestamps may be provided as ISO-8601 strings or integer epochs in
-  seconds through nanoseconds.【F:src/internal/csv_io.hpp†L30-L65】【F:src/csv_io.cpp†L34-L121】
+  seconds through nanoseconds.
 * Ticker symbols are derived from filenames (sans extension) and normalized to
-  uppercase without whitespace.【F:src/catalog.cpp†L43-L70】
+  uppercase without whitespace.
 
 ## Generated artifacts
 
@@ -34,14 +34,14 @@ Running `build_dataset` creates the following outputs:
 
 * **Per-ticker window manifests** – each ticker produces a binary manifest file
   (currently named `*_windows.parquet`) that records every window's index range
-  and optional target span.【F:src/driver.cpp†L139-L157】【F:src/internal/window_manifest.hpp†L23-L65】
+  and optional target span.
 * **`manifest.json`** – captures dataset-level metadata such as feature lists,
   scaler choices, window counts, and per-ticker statistics. It also stores the
   build timestamp, input/output directories, and a lookup table for ticker
-  statistics.【F:include/rindle/manifest_types.hpp†L16-L52】【F:src/manifest.cpp†L23-L109】
+  statistics.
 
 The manifest content can be reused later to reload tensors without repeating the
-entire pipeline.【F:src/rindle_api.cpp†L133-L169】
+entire pipeline.
 
 ## Tensor layout
 
@@ -49,9 +49,9 @@ Datasets are represented by lightweight tensor wrappers that store contiguous
 feature (`X`) and target (`Y`) data along with window metadata:
 
 * `Tensor3D` models a `[window, sequence, feature]` cube in row-major order and
-  exposes helpers for indexing within a flat buffer.【F:include/rindle/dataset_types.hpp†L17-L49】
+  exposes helpers for indexing within a flat buffer.
 * `Dataset` holds the feature/target tensors plus a `WindowMeta` vector that
-  tracks the source ticker and row ranges for every window.【F:include/rindle/dataset_types.hpp†L51-L80】
+  tracks the source ticker and row ranges for every window.
 
 ## Scaler support
 
@@ -59,15 +59,15 @@ Rindle offers several built-in scaling strategies and records the fitted
 parameters alongside the manifest:
 
 * `ScalerKind` enumerates available scalers (standard, min-max, robust, etc.) and
-  is stored in the dataset configuration and manifest.【F:include/rindle/scaler.hpp†L17-L63】【F:include/rindle/manifest_types.hpp†L19-L32】
+  is stored in the dataset configuration and manifest.
 * `ScalerStore` serializes the per-feature statistics to JSON for reuse, and CSV
-  helpers exist to persist or reload artifact bundles if needed.【F:include/rindle/scaler.hpp†L65-L105】【F:src/csv_io.cpp†L151-L236】
+  helpers exist to persist or reload artifact bundles if needed.
 
 ## Window generation
 
 Sliding windows are produced using ticker-level statistics exposed by the
 manifest. The window maker can stream results to a sink (for writing manifests)
-or return them as in-memory vectors for smaller workloads.【F:src/window_maker.cpp†L1-L149】
+or return them as in-memory vectors for smaller workloads.
 
 ## Directory structure
 
@@ -91,25 +91,25 @@ cmake --build build
 ```
 
 The project targets C++20, fetches `nlohmann_json`, and optionally brings in
-Catch2 and pybind11 for tests and bindings.【F:CMakeLists.txt†L1-L102】 Use
+Catch2 and pybind11 for tests and bindings. Use
 `cmake --build build --target rindle_tests` followed by `ctest --test-dir build`
-to run the test suite when implemented.【F:CMakeLists.txt†L69-L87】
+to run the test suite when implemented.
 
 ## Python bindings
 
 Enable `RINDLE_BUILD_PYTHON` to build the `rindle` Python module. The bindings
 expose tensor views as NumPy arrays while reusing the same configuration and
-loading APIs as C++.【F:src/python/bindings.cpp†L19-L214】 The generated extension
+loading APIs as C++. The generated extension
 module is placed in the build tree (e.g., `build/src/python/rindle.*`).
 
 ## Distributing on PyPI or installing via pip
 
 The repository ships a `pyproject.toml` configured with
 [`scikit-build-core`](https://scikit-build-core.readthedocs.io/) so the C++
-extension can be packaged like a standard Python project.【F:pyproject.toml†L1-L40】
+extension can be packaged like a standard Python project.
 The Python package re-exports the compiled module, exposes a version sourced
 from package metadata, and keeps the import path as `import rindle` for existing
-scripts.【F:python/rindle/__init__.py†L1-L23】
+scripts.
 
 ### Install into a local Python environment
 
@@ -170,4 +170,4 @@ script after building the bindings.
 The Catch2 harness in `tests/` is ready for assertions once real scenarios are
 added, and the window manifest writer currently produces a lightweight binary
 format that can later be swapped for an actual Parquet implementation without
-changing the public API.【F:src/internal/window_manifest.hpp†L23-L65】
+changing the public API.
