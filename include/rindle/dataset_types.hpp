@@ -1,6 +1,15 @@
-//
-// Created by Eric Gilerson on 10/19/25.
-//
+/*==============================================================================
+File: include/rindle/dataset_types.hpp
+
+  Overview:
+    Defines the tensor containers and window metadata structures returned by
+    the public dataset-loading APIs.
+
+  Key functionality:
+    - Tensor3D models a contiguous [window, sequence, feature] block.
+    - WindowMeta captures the provenance for each generated window.
+    - Dataset bundles feature/target tensors together with their metadata.
+==============================================================================*/
 
 #ifndef RIVULET_DATASET_TYPES_HPP
 #define RIVULET_DATASET_TYPES_HPP

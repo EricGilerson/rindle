@@ -1,20 +1,16 @@
-//
-// Created by Eric Gilerson on 10/7/25.
-//
 /*==============================================================================
-  File: include/rivulet/catalog.hpp
+File: src/internal/catalog.hpp
 
-  Purpose:
-    Discovers input files (one per ticker), normalizes ticker names, and resolves
-    output paths for per-ticker and combined artifacts.
+  Overview:
+    Declares the Catalog helper responsible for discovering ticker CSV files
+    and capturing the statistics needed by the build manifest.
 
-  Responsibilities:
-    - Scan an input directory for CSVs; map filenames to ticker symbols.
-    - Provide an iterable list of "work items" with input and output locations.
-    - Track running counts for rows/windows to populate the manifest.
-
-  Notes:
-    - Only file discovery and naming conventions live here; no parsing logic.
+  Key functionality:
+    - Scan the configured input directory, normalizing filenames into ticker
+      symbols and producing work items for the driver.
+    - Resolve the base output directory for ticker artifacts and optional
+      combined exports.
+    - Accumulate ticker statistics so downstream components can report totals.
 ==============================================================================*/
 
 #ifndef RIVULET_CATALOG_HPP

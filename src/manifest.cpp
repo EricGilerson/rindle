@@ -4,15 +4,15 @@
 /*==============================================================================
   File: src/manifest.cpp
 
-  Purpose:
-    JSON serialization/deserialization for the dataset manifest.
+Overview:
+    Implements the JSON serialization and deserialization routines for dataset
+    manifest metadata, including scaler parameter encoding.
 
-  Responsibilities:
-    - Emit manifest.json capturing the full on-disk contract.
-    - Read and validate an existing manifest when needed.
-
-  Notes:
-    - Keep fields stable; add versioning if you evolve the contract.
+Key functionality:
+    - Populate `ManifestContent` from build inputs and stamp it with metadata.
+    - Persist manifest.json with pretty formatting and a build timestamp.
+    - Reload manifests from disk, rebuilding ticker lookup tables and reporting
+      detailed errors when parsing fails.
 ==============================================================================*/
 
 #include "internal/manifest.hpp"

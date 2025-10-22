@@ -1,24 +1,15 @@
-//
-// Created by Eric Gilerson on 10/7/25.
-//
 /*==============================================================================
-  File: include/rivulet/driver.hpp
+File: src/internal/driver.hpp
 
-  Purpose:
-    Orchestrates the end-to-end dataset build for all tickers. This is the
-    entrypoint the CLI calls.
+  Overview:
+    Declares the Driver orchestrator that turns a `DatasetConfig` into on-disk
+    artifacts and manifest metadata for the dataset build pipeline.
 
-  Responsibilities:
-    - Load configuration (seq_length, horizon, features, paths, time mode).
-    - For each ticker: read → make windows → write outputs.
-    - Write window manifests as {ticker}_windows.parquet in output_dir (flat structure).
-    - Write the final manifest.json.
-    - Emit a concise summary (row counts, window counts).
-
-  Notes:
-    - Driver does not contain parsing or window math; it wires modules together.
-    - All outputs go directly to output_dir without per-ticker subdirectories.
-    - No cleaning stage - works directly with raw CSV data.
+  Key functionality:
+    - Provide a `run` entry point that discovers ticker inputs, builds windows,
+      persists manifests, and reports aggregate statistics.
+    - Expose the generated manifest so helper components (e.g., window maker)
+      can look up ticker statistics during the run.
 ==============================================================================*/
 
 #ifndef RIVULET_DRIVER_HPP

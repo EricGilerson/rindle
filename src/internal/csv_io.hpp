@@ -1,6 +1,17 @@
-// =======================
-// File: include/rivulet/csv_io.hpp
-// =======================
+/*==============================================================================
+File: src/internal/csv_io.hpp
+
+  Overview:
+    Declares the columnar CSV frame representation and scaler artifact helpers
+    shared across the dataset build pipeline.
+
+  Key functionality:
+    - Define identifiers for fold-specific scaler metadata and their payloads.
+    - Provide the CsvIO interface for reading canonical time-series CSV files
+      and persisting scaler parameters to disk.
+    - Expose a timestamp parser that converts flexible input formats to
+      nanoseconds.
+==============================================================================*/
 #pragma once
 
 #include <string>

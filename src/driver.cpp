@@ -4,19 +4,17 @@
 /*==============================================================================
   File: src/driver.cpp
 
-  Purpose:
-    Wires catalog, csv_io, window_maker, and manifest into a single run.
-    No cleaning stage - works directly with raw input CSVs.
+Overview:
+    Coordinates the dataset build by wiring catalog discovery, CSV ingestion,
+    scaler fitting, window generation, and manifest emission into a single run.
 
-  Responsibilities:
-    - Iterate tickers: read → window → write per-ticker outputs.
-    - Handle error propagation and summary reporting.
-    - Write manifest.json at the end with final counts and time mode.
-    - All outputs saved flat to output_dir: {ticker}_windows.parquet, manifest.json
-
-  Notes:
-    - Keeps the control flow and logging in one place; no heavy logic inside.
-    - Raw CSV data is used as-is; window_maker works with row indices.
+  Key functionality:
+    - Iterate over discovered tickers, fit feature scalers, and build sliding
+      windows for each input file.
+    - Persist per-ticker window manifests (using the current binary stub) and
+      collect ticker statistics for reporting.
+    - Finalize the run by writing manifest.json and printing a human-readable
+      summary of the build results.
 ==============================================================================*/
 
 #include "internal/driver.hpp"

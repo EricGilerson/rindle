@@ -1,18 +1,14 @@
-//
-// Created by Eric Gilerson on 10/7/25.
-//
 /*==============================================================================
   File: src/catalog.cpp
 
-  Purpose:
-    Implements discovery of input CSVs and resolution of output paths.
+Overview:
+    Discovers ticker CSV files, normalizes their symbols, and captures the
+    statistics needed to populate the build manifest.
 
-  Responsibilities:
-    - Map filenames to ticker symbols and build per-ticker output directories.
-    - Maintain aggregate counts for manifest reporting.
-
-  Notes:
-    - Ignores non-CSV files; normalization rules are centralized here.
+Key functionality:
+    - Scan the configured input directory for `.csv` files and build work items.
+    - Resolve the base output directory for each ticker artifact.
+    - Accumulate processed row and window totals for later reporting.
 ==============================================================================*/
 
 #include "internal/catalog.hpp"

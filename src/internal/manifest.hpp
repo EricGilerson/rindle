@@ -2,20 +2,16 @@
 // Created by Eric Gilerson on 10/7/25.
 //
 /*==============================================================================
-  File: include/rivulet/manifest.hpp
+File: src/internal/manifest.hpp
 
-  Purpose:
-    Defines the manifest structure and JSON serialization for the dataset build.
-    The manifest is the contract your training code relies upon.
+Overview:
+    Declares the Manifest class that captures dataset build metadata and
+    serializes it to and from JSON.
 
-  Responsibilities:
-    - Record seq_length, future_horizon, ordered feature list, flatten order,
-      time mode (utc_ns or ordinal), and whether targets exist.
-    - Capture per-ticker and combined row counts and whether sorting occurred.
-    - Persist the output layout so downstream code can load deterministically.
-
-  Notes:
-    - Bump a version field here if you change the on-disk contract.
+Key functionality:
+    - Populate `ManifestContent` from a `DatasetConfig` and `Catalog` summary.
+    - Persist manifest.json and reload it with validation helpers.
+    - Offer ticker lookup utilities to assist window generation code at runtime.
 ==============================================================================*/
 
 #ifndef RIVULET_MANIFEST_HPP

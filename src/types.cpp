@@ -4,15 +4,10 @@
 /*==============================================================================
   File: src/types.cpp
 
-  Purpose:
-    Optional helpers backing types.hpp (timestamp utilities, small formatters).
-    Keep this file tiny; most definitions remain inline in headers when trivial.
-
-  Responsibilities:
-    - Implement any non-inline helpers declared in types.hpp.
-
-  Notes:
-    - May be empty initially; added only if/when needed.
+Overview:
+    Provides a compilation unit for non-inline helpers associated with the
+    shared type definitions in `types.hpp`. The file is intentionally minimal
+    until additional utilities are required.
 ==============================================================================*/
 
 #include "rindle/types.hpp"

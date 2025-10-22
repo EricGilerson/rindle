@@ -2,22 +2,18 @@
 // Created by Eric Gilerson on 10/6/25.
 //
 /*==============================================================================
-  File: include/rivulet/types.hpp
+File: include/rindle/types.hpp
 
-  Purpose:
-    Central type definitions shared across the project (timestamps, keys,
-    events/rows, feature vectors, configs, and simple status/result structs).
-    Keeping these here avoids duplication and circular dependencies.
+  Overview:
+    Central type definitions shared across the library, covering timestamps,
+    dataset configuration objects, scaler descriptors, and lightweight status
+    helpers.
 
-  Responsibilities:
-    - Define a single internal notion of time (UTC nanoseconds) and, if needed,
-      an ordinal "row index" mode for datasets without timestamps.
-    - Provide lightweight containers for rows, features, and configuration.
-    - Establish clear ownership rules using standard containers (no raw new/delete).
-
-  Notes:
-    - Changing time precision or key representation should be done here.
-    - This header should remain lightweight and stable; many files include it.
+  Key functionality:
+    - Establishes canonical time representations and key aliases.
+    - Provides structs for dataset configuration, ticker statistics, and work
+      items consumed by the build pipeline.
+    - Supplies reusable Status/Result helpers for consistent error handling.
 ==============================================================================*/
 
 #ifndef RIVULET_TYPES_HPP

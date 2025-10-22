@@ -27,7 +27,7 @@ namespace rivulet {
 
 
 /**
- * Write a complete manifest to the parquet-backed binary format.
+ * Write a complete manifest to the custom binary format used for window rows.
  * Returns true on success and fills error_msg on failure.
  */
 bool write_windows_manifest_parquet(const std::string& path,
@@ -35,16 +35,14 @@ bool write_windows_manifest_parquet(const std::string& path,
                                     std::string* error_msg);
 
 /**
- * Append a single row to an existing parquet manifest.
- * Creates the file if it does not exist.
+ * Append a single row to an existing manifest file (creating it if necessary).
  */
 bool append_windows_manifest_parquet(const std::string& path,
                                      const WindowRow& row,
                                      std::string* error_msg);
 
 /**
- * Append multiple rows to an existing parquet manifest.
- * Creates the file if it does not exist.
+ * Append multiple rows to an existing manifest file (creating it if necessary).
  * More efficient than calling append_windows_manifest_parquet repeatedly.
  */
 bool append_windows_manifest_parquet_batch(const std::string& path,
@@ -52,8 +50,7 @@ bool append_windows_manifest_parquet_batch(const std::string& path,
                                            std::string* error_msg);
 
 /**
- * Read a manifest written by write_windows_manifest_parquet.
- * Populates rows with the parsed window definitions.
+ * Read a manifest written by write_windows_manifest_parquet into memory.
  */
 bool read_windows_manifest_parquet(const std::string& path,
                                    std::vector<WindowRow>* rows,

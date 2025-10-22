@@ -4,16 +4,17 @@
 /*==============================================================================
   File: src/window_maker.cpp
 
-  Purpose:
-    Implements sliding-window construction and target alignment.
+Overview:
+    Implements sliding-window generation using ticker statistics from the
+    manifest to produce window ranges and optional prediction targets.
 
-  Responsibilities:
-    - Produce flattened, time-major windows of length L over features F.
-    - Align targets to the window end row and take H future steps.
-    - Populate index rows with original timestamps or ordinal indices.
-
-  Notes:
-    - Guarantees “no future leakage”: windows use rows ≤ end, targets start at end.
+  Key functionality:
+    - Stream or materialize windows per ticker based on the configured length,
+      stride, and horizon while preventing look-ahead leakage.
+    - Support on-the-fly manifest writing by piping streamed rows into the
+      binary window-manifest helpers.
+    - Provide convenience wrappers that aggregate windows across multiple
+      tickers when working in memory.
 ==============================================================================*/
 
 #include "internal/window_maker.hpp"
