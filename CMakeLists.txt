@@ -135,7 +135,10 @@ if(RINDLE_BUILD_PYTHON)
 
     target_link_libraries(rindle_python PRIVATE rindle)
     target_include_directories(rindle_python PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-    set_target_properties(rindle_python PROPERTIES OUTPUT_NAME "rindle")
+    set_target_properties(rindle_python PROPERTIES
+            OUTPUT_NAME "rindle"
+            ARCHIVE_OUTPUT_NAME "rindle_python"
+    )
 
     install(
             TARGETS rindle_python
