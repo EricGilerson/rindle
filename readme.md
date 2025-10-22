@@ -102,6 +102,32 @@ expose tensor views as NumPy arrays while reusing the same configuration and
 loading APIs as C++.【F:src/python/bindings.cpp†L19-L214】 The generated extension
 module is placed in the build tree (e.g., `build/src/python/rindle.*`).
 
+## Distributing on PyPI or installing via pip
+
+The repository ships a `pyproject.toml` configured with
+[`scikit-build-core`](https://scikit-build-core.readthedocs.io/) so the C++
+extension can be packaged like a standard Python project.【F:pyproject.toml†L1-L40】
+The Python package re-exports the compiled module, exposes a version sourced
+from package metadata, and keeps the import path as `import rindle` for existing
+scripts.【F:python/rindle/__init__.py†L1-L23】
+
+Build and install a wheel locally with pip:
+
+```bash
+pip install .
+```
+
+For distribution, create a wheel and publish it to an index:
+
+```bash
+python -m build
+twine upload dist/*
+```
+
+Both commands honour the CMake options in the project file; tests and examples
+are disabled automatically during wheel builds to keep artifacts minimal while
+still compiling the Python bindings.【F:pyproject.toml†L42-L45】
+
 ## Examples
 
 The `examples` directory contains runnable demonstrations for both languages:
