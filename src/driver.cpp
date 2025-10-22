@@ -24,6 +24,7 @@ Overview:
 
 #include <iostream>
 #include <filesystem>
+#include <limits>
 
 namespace rivulet {
 
@@ -145,9 +146,18 @@ bool Driver::process_ticker(
     // Step 3: Build windows using window_maker
     SingleTickerWindowSpec window_spec;
     window_spec.ticker = item.ticker;
-    window_spec.window_length_ns = config_.seq_length;  // Using as row count
+    if (config_.seq_length > static_cast<std::size_t>(std::numeric_limits<std::int64_t>::max())) {
+        error_msg = "Sequence length exceeds supported range";
+        return false;
+    }
+    if (config_.future_horizon > static_cast<std::size_t>(std::numeric_limits<std::int64_t>::max())) {
+        error_msg = "Future horizon exceeds supported range";
+        return false;
+    }
+
+    window_spec.window_length_ns = static_cast<std::int64_t>(config_.seq_length);  // Using as row count
     window_spec.step_ns = 1;  // Step by 1 row
-    window_spec.horizon_ns = config_.future_horizon;  // Using as row count
+    window_spec.horizon_ns = static_cast<std::int64_t>(config_.future_horizon);  // Using as row count
     window_spec.with_targets = config_.target_column.has_value();
 
     // Generate windows

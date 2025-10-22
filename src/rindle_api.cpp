@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <limits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -266,14 +267,47 @@ Result<Dataset> get_dataset(const ManifestContent& manifest_content) {
     }
 
     // Allocate tensors
-    dataset.X.reshape(total_windows, seq_len, n_features);
+    if (total_windows > static_cast<std::size_t>(std::numeric_limits<std::int64_t>::max())) {
+        return Result<Dataset>{
+            std::nullopt,
+            Status::Error("Number of windows exceeds supported range")
+        };
+    }
+    if (seq_len > static_cast<std::size_t>(std::numeric_limits<std::int64_t>::max())) {
+        return Result<Dataset>{
+            std::nullopt,
+            Status::Error("Sequence length exceeds supported range")
+        };
+    }
+    if (n_features > static_cast<std::size_t>(std::numeric_limits<std::int64_t>::max())) {
+        return Result<Dataset>{
+            std::nullopt,
+            Status::Error("Feature count exceeds supported range")
+        };
+    }
+
+    const auto total_windows_i64 = static_cast<std::int64_t>(total_windows);
+    const auto seq_len_i64 = static_cast<std::int64_t>(seq_len);
+    const auto n_features_i64 = static_cast<std::int64_t>(n_features);
+
+    dataset.X.reshape(total_windows_i64, seq_len_i64, n_features_i64);
+
+    std::int64_t future_horizon_i64 = 0;
     if (has_target) {
-        dataset.Y.reshape(total_windows, manifest_content.future_horizon, 1);
+        if (manifest_content.future_horizon > static_cast<std::size_t>(std::numeric_limits<std::int64_t>::max())) {
+            return Result<Dataset>{
+                std::nullopt,
+                Status::Error("Future horizon exceeds supported range")
+            };
+        }
+        future_horizon_i64 = static_cast<std::int64_t>(manifest_content.future_horizon);
+        dataset.Y.reshape(total_windows_i64, future_horizon_i64, static_cast<std::int64_t>(1));
     }
     dataset.meta.reserve(total_windows);
 
     // Now fill tensors by reading actual CSV data from INPUT directory
     for (std::size_t w = 0; w < all_windows.size(); ++w) {
+        const auto w_i64 = static_cast<std::int64_t>(w);
         const auto& window_row = all_windows[w];
 
         // Store metadata
@@ -320,15 +354,35 @@ Result<Dataset> get_dataset(const ManifestContent& manifest_content) {
         const CsvFrame& frame = *frame_ptr;
         
         // Validate we have enough rows
-        if (frame.features.empty() || frame.features[0].size() < static_cast<std::size_t>(window_row.window_end + 1)) {
+        if (window_row.window_end < 0) {
             return Result<Dataset>{
                 std::nullopt,
-                Status::Error("Not enough rows in CSV for window [" + 
-                             std::to_string(window_row.window_start) + ", " + 
+                Status::Error("Window end index is negative")
+            };
+        }
+        if (window_row.window_end >= static_cast<std::int64_t>(std::numeric_limits<std::size_t>::max())) {
+            return Result<Dataset>{
+                std::nullopt,
+                Status::Error("Window end index exceeds supported range")
+            };
+        }
+        if (frame.features.empty()) {
+            return Result<Dataset>{
+                std::nullopt,
+                Status::Error("CSV frame is missing feature columns")
+            };
+        }
+
+        const auto required_rows = static_cast<std::size_t>(window_row.window_end) + 1;
+        if (frame.features[0].size() < required_rows) {
+            return Result<Dataset>{
+                std::nullopt,
+                Status::Error("Not enough rows in CSV for window [" +
+                             std::to_string(window_row.window_start) + ", " +
                              std::to_string(window_row.window_end) + "]")
             };
         }
-        
+
         const auto* scaler_params = fetch_scalers_for_ticker(window_row.ticker);
         if (!scaler_params) {
             return Result<Dataset>{
@@ -338,16 +392,30 @@ Result<Dataset> get_dataset(const ManifestContent& manifest_content) {
         }
 
         // Fill X tensor: extract window_start to window_end
-        for (std::int64_t s = 0; s < static_cast<std::int64_t>(seq_len); ++s) {
+        for (std::int64_t s = 0; s < seq_len_i64; ++s) {
             std::int64_t row_idx = window_row.window_start + s;
+
+            if (row_idx < 0) {
+                return Result<Dataset>{
+                    std::nullopt,
+                    Status::Error("Window row index is negative")
+                };
+            }
+            if (row_idx > static_cast<std::int64_t>(std::numeric_limits<std::size_t>::max())) {
+                return Result<Dataset>{
+                    std::nullopt,
+                    Status::Error("Window row index exceeds supported range")
+                };
+            }
+            const auto row_idx_usize = static_cast<std::size_t>(row_idx);
 
             for (std::size_t f = 0; f < n_features; ++f) {
                 // Find the feature column index in the CSV
                 const std::string& feature_name = manifest_content.feature_columns[f];
-                auto it = std::find(frame.feature_names.begin(), 
-                                   frame.feature_names.end(), 
+                auto it = std::find(frame.feature_names.begin(),
+                                   frame.feature_names.end(),
                                    feature_name);
-                
+
                 if (it == frame.feature_names.end()) {
                     return Result<Dataset>{
                         std::nullopt,
@@ -355,13 +423,19 @@ Result<Dataset> get_dataset(const ManifestContent& manifest_content) {
                     };
                 }
 
-                std::size_t csv_col_idx = std::distance(frame.feature_names.begin(), it);
-                double value = frame.features[csv_col_idx][row_idx];
+                const auto csv_col_idx = static_cast<std::size_t>(std::distance(frame.feature_names.begin(), it));
+                if (row_idx_usize >= frame.features[csv_col_idx].size()) {
+                    return Result<Dataset>{
+                        std::nullopt,
+                        Status::Error("Row index out of bounds for feature column: " + feature_name)
+                    };
+                }
+                double value = frame.features[csv_col_idx][row_idx_usize];
                 double scaled_value = apply_scaler_value(value, (*scaler_params)[f]);
-                dataset.X.at(w, s, f) = static_cast<float>(scaled_value);
+                dataset.X.at(w_i64, s, static_cast<std::int64_t>(f)) = static_cast<float>(scaled_value);
             }
         }
-        
+
         // Fill Y tensor if we have targets
         if (has_target && window_row.target_start.has_value()) {
             const std::string& target_col = *manifest_content.target_column;
@@ -377,20 +451,48 @@ Result<Dataset> get_dataset(const ManifestContent& manifest_content) {
                 };
             }
             
-            std::size_t target_col_idx = std::distance(frame.feature_names.begin(), it);
-            
-            for (std::int64_t h = 0; h < static_cast<std::int64_t>(manifest_content.future_horizon); ++h) {
-                std::int64_t target_row = *window_row.target_start + h;
-                
-                if (target_row >= static_cast<std::int64_t>(frame.features[target_col_idx].size())) {
+            const auto target_col_idx = static_cast<std::size_t>(std::distance(frame.feature_names.begin(), it));
+
+            const std::int64_t target_start = *window_row.target_start;
+            if (target_start < 0) {
+                return Result<Dataset>{
+                    std::nullopt,
+                    Status::Error("Target start index is negative")
+                };
+            }
+            if (target_start > static_cast<std::int64_t>(std::numeric_limits<std::size_t>::max())) {
+                return Result<Dataset>{
+                    std::nullopt,
+                    Status::Error("Target start index exceeds supported range")
+                };
+            }
+
+            for (std::int64_t h = 0; h < future_horizon_i64; ++h) {
+                std::int64_t target_row = target_start + h;
+
+                if (target_row < 0) {
+                    return Result<Dataset>{
+                        std::nullopt,
+                        Status::Error("Target row is negative")
+                    };
+                }
+                if (target_row > static_cast<std::int64_t>(std::numeric_limits<std::size_t>::max())) {
+                    return Result<Dataset>{
+                        std::nullopt,
+                        Status::Error("Target row exceeds supported range")
+                    };
+                }
+                const auto target_row_idx = static_cast<std::size_t>(target_row);
+
+                if (target_row_idx >= frame.features[target_col_idx].size()) {
                     return Result<Dataset>{
                         std::nullopt,
                         Status::Error("Target row out of bounds: " + std::to_string(target_row))
                     };
                 }
-                
-                double value = frame.features[target_col_idx][target_row];
-                dataset.Y.at(w, h, 0) = static_cast<float>(value);
+
+                double value = frame.features[target_col_idx][target_row_idx];
+                dataset.Y.at(w_i64, h, 0) = static_cast<float>(value);
             }
         }
     }
@@ -417,11 +519,11 @@ Result<Dataset> get_dataset(const std::filesystem::path& manifest_path) {
 }
 
 Result<FittedScaler> get_feature_scaler(
-    const ManifestContent& manifest,
+    const ManifestContent& manifest_content,
     const std::string& ticker,
     const std::string& feature
 ) {
-    const TickerStats* stats = manifest.find_stats(ticker);
+    const TickerStats* stats = manifest_content.find_stats(ticker);
     if (!stats) {
         return Result<FittedScaler>{
             std::nullopt,

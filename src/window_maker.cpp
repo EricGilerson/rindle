@@ -19,6 +19,7 @@ Overview:
 
 #include "internal/window_maker.hpp"
 #include <filesystem>
+#include <limits>
 #include "internal/driver.hpp"
 
 namespace rivulet {
@@ -80,7 +81,7 @@ namespace rivulet {
 
     std::vector<WindowRow> windows;
 
-    if (!ticker_stats || ticker_stats->input_rows <= 0) {
+    if (!ticker_stats || ticker_stats->input_rows == 0) {
       if (error_msg) *error_msg = "Invalid or empty TickerStats";
       return windows;
     }
@@ -89,8 +90,14 @@ namespace rivulet {
       return windows;
     }
 
+    if (ticker_stats->input_rows > static_cast<std::size_t>(std::numeric_limits<std::int64_t>::max())) {
+      if (error_msg) *error_msg = "TickerStats input_rows exceeds supported range";
+      return windows;
+    }
+
+    const std::int64_t total_rows = static_cast<std::int64_t>(ticker_stats->input_rows);
     const std::int64_t start = spec.window_length_ns - 1;
-    const std::int64_t end   = ticker_stats->input_rows - spec.horizon_ns - 1;
+    const std::int64_t end   = total_rows - spec.horizon_ns - 1;
 
     if (end < start) {
       // Not enough history; not an error.
@@ -171,13 +178,19 @@ bool make_windows_for_ticker_streaming(const SingleTickerWindowSpec &spec,
     if (error_msg) *error_msg = "Invalid window parameters: window_length and step must be positive.";
     return false;
   }
-  if (stats->input_rows <= 0) {
+  if (stats->input_rows == 0) {
     if (error_msg) *error_msg = "Ticker has no input rows: " + spec.ticker;
     return false;
   }
+  if (stats->input_rows > static_cast<std::size_t>(std::numeric_limits<std::int64_t>::max())) {
+    if (error_msg) *error_msg = "TickerStats input_rows exceeds supported range";
+    return false;
+  }
+
+  const std::int64_t total_rows = static_cast<std::int64_t>(stats->input_rows);
   // Match the index math from your vector-building version
   const std::int64_t start_i = L - 1;
-  const std::int64_t end_i   = stats->input_rows - H - 1;
+  const std::int64_t end_i   = total_rows - H - 1;
 
   if (end_i < start_i) {
     // Not enough history to form a single window

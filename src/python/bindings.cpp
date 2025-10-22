@@ -7,6 +7,7 @@
 
 #include <array>
 #include <optional>      // added
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -36,17 +37,34 @@ T unwrap(rv::Result<T>&& result, const char* function_name) {
 
 py::array tensor_view(rv::Tensor3D& tensor, py::handle base) {
     using value_type = rv::Tensor3D::value_type;
-    std::array<py::ssize_t, 3> shape = {
-        static_cast<py::ssize_t>(tensor.windows),
-        static_cast<py::ssize_t>(tensor.seq_len),
-        static_cast<py::ssize_t>(tensor.features)
+
+    if (tensor.windows < 0 || tensor.seq_len < 0 || tensor.features < 0) {
+        throw std::invalid_argument("Tensor dimensions must be non-negative");
+    }
+
+    const auto max_ssize = std::numeric_limits<py::ssize_t>::max();
+    if (tensor.windows > max_ssize || tensor.seq_len > max_ssize || tensor.features > max_ssize) {
+        throw std::overflow_error("Tensor dimensions exceed Py_ssize_t range");
+    }
+
+    const py::ssize_t windows = static_cast<py::ssize_t>(tensor.windows);
+    const py::ssize_t seq_len = static_cast<py::ssize_t>(tensor.seq_len);
+    const py::ssize_t features = static_cast<py::ssize_t>(tensor.features);
+    const py::ssize_t value_size = static_cast<py::ssize_t>(sizeof(value_type));
+
+    auto checked_product = [&](py::ssize_t lhs, py::ssize_t rhs, const char* label) {
+        if (lhs != 0 && rhs > max_ssize / lhs) {
+            throw std::overflow_error(std::string(label) + " exceeds Py_ssize_t range");
+        }
+        return lhs * rhs;
     };
 
-    std::array<py::ssize_t, 3> strides = {
-        static_cast<py::ssize_t>(tensor.seq_len * tensor.features * sizeof(value_type)),
-        static_cast<py::ssize_t>(tensor.features * sizeof(value_type)),
-        static_cast<py::ssize_t>(sizeof(value_type))
-    };
+    const py::ssize_t stride_feature = value_size;
+    const py::ssize_t stride_seq = checked_product(features, stride_feature, "Tensor stride (sequence)");
+    const py::ssize_t stride_window = checked_product(seq_len, stride_seq, "Tensor stride (window)");
+
+    std::array<py::ssize_t, 3> shape = {windows, seq_len, features};
+    std::array<py::ssize_t, 3> strides = {stride_window, stride_seq, stride_feature};
 
     return py::array(
         py::dtype::of<value_type>(),

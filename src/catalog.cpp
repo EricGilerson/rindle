@@ -49,7 +49,7 @@ namespace rivulet {
         return true;
     }
     std::filesystem::path Catalog::output_dir_for_ticker(const std::string& ticker) const {
-        return config_.output_dir;
+        return config_.output_dir / ticker;
     }
     //should not be used
     std::filesystem::path Catalog::combined_output_dir() const {
@@ -78,7 +78,7 @@ namespace rivulet {
         std::string ticker;
         for (char c : filename) {
             if (!std::isspace(static_cast<unsigned char>(c))) {
-                ticker += std::toupper(static_cast<unsigned char>(c));
+                ticker += static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
             }
         }
         return ticker;
