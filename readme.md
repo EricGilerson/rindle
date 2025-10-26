@@ -2,6 +2,7 @@
 
 [![PyPI Version](https://img.shields.io/pypi/v/rindle.svg)](https://pypi.org/project/rindle/)
 [![PyPI Downloads](https://img.shields.io/pypi/dm/rindle.svg)](https://pypi.org/project/rindle/)
+[![Total Downloads](https://img.shields.io/pepy/dt/rindle)](https://pepy.tech/project/rindle)
 
 
 Rindle is a C++20 library for turning raw, per-ticker CSV files into training-ready
