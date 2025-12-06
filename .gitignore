@@ -1,0 +1,31 @@
+# Build directories
+build/
+dist/
+cmake-build-debug/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+.env
+
+# Text editors / IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# MacOS
+.DS_Store
+
+# Data
+data/processed/
+data/temp*/
+*.parquet
+manifest.json
+
+# Local config
+.pypirc
+source

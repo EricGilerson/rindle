@@ -82,11 +82,13 @@ Result<ManifestContent> build_dataset(const DatasetConfig& config);
  * @return Result containing Dataset with X, Y tensors and metadata
  */
 Result<Dataset> get_dataset(
-    const ManifestContent& manifest
+    const ManifestContent& manifest,
+    double percentage = 1.0
 );
 
 Result<Dataset> get_dataset(
-    const std::filesystem::path& manifest_path
+    const std::filesystem::path& manifest_path,
+    double percentage = 1.0
 );
 
 Result<FittedScaler> get_feature_scaler(
