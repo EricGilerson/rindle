@@ -59,7 +59,13 @@ entire pipeline.
 ## Tensor layout
 
 Datasets are represented by lightweight tensor wrappers that store contiguous
-feature (`X`) and target (`Y`) data along with window metadata:
+// 3. Get dataset for training (loads tensors into memory)
+// Optional: percentage (default 1.0) loads a random subset of the data
+auto dataset_result = rindle::get_dataset(manifest, 1.0);
+/*
+dataset.X: Tensor3D [windows, seq_length, n_features]
+dataset.Y: Tensor3D [windows, horizon, 1]
+*/feature (`X`) and target (`Y`) data along with window metadata:
 
 * `Tensor3D` models a `[window, sequence, feature]` cube in row-major order and
   exposes helpers for indexing within a flat buffer.

@@ -59,7 +59,12 @@ config = rindle.create_config(
 )
 
 manifest = rindle.build_dataset(config)
+
+# Load full dataset (default)
 dataset = rindle.get_dataset(manifest)
+
+# Load a random 10% sample (maintains ticker distribution)
+dataset_small = rindle.get_dataset(manifest, percentage=0.1)
 
 X = dataset.X  # NumPy array: (windows, seq_length, n_features), dtype=float32
 Y = dataset.Y  # NumPy array aligned with X when targets are enabled
@@ -112,7 +117,7 @@ deviation, quartiles, and min/max bounds).
 | --- | --- |
 | `rindle.create_config(...)` | Validate paths, choose feature columns, configure window geometry and scaling. Returns a `DatasetConfig`. |
 | `rindle.build_dataset(config)` | Run discovery → scaling → windowing and return a `ManifestContent`. |
-| `rindle.get_dataset(manifest_or_path)` | Load feature/target tensors from an in-memory manifest or a saved `manifest.json`. |
+| `rindle.get_dataset(manifest_or_path, percentage=1.0)` | Load feature/target tensors. Optional `percentage` (0.0 < p <= 1.0) loads a random subset of windows per ticker. |
 | `rindle.get_feature_scaler(manifest_or_path, ticker, feature)` | Retrieve the fitted scaler for a ticker/feature pair to apply or invert scaling. |
 | `rindle.inverse_transform_value(scaler, value)` | Convenience helper to undo scaling with a `FittedScaler`. |
 

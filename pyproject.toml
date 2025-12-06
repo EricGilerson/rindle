@@ -8,7 +8,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "rindle"
-version = "0.1.0"
+version = "0.1.1"
 description = "Dataset preparation library with Python bindings for sliding window tensors"
 readme = { file = "readme_python.md", content-type = "text/markdown" }
 requires-python = ">=3.9"
