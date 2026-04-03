@@ -29,3 +29,5 @@ manifest.json
 # Local config
 .pypirc
 source
+.resolv
+/.idea
