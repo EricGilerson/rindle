@@ -11,6 +11,10 @@ from notebooks or training scripts.
 - **Deterministic dataset builds** – declare the window geometry, scaler, and
   input schema with `rindle.create_config` and let the engine emit consistent
   results across runs.
+- **Multi-threaded** – both `build_dataset` and `get_dataset` parallelize work
+  across tickers and windows using a C++ thread pool. An optional `thread_count`
+  parameter (default `0` = auto) gives explicit control. The Python GIL is
+  released during these calls so other threads stay responsive.
 - **Manifest-driven reloads** – rehydrate tensors on demand with
   `rindle.get_dataset` using the in-memory manifest returned by a build or a
   saved `manifest.json` file.
@@ -58,13 +62,16 @@ config = rindle.create_config(
     scaler_kind=rindle.ScalerKind.Standard,
 )
 
-manifest = rindle.build_dataset(config)
+manifest = rindle.build_dataset(config)  # parallelized across tickers
 
 # Load full dataset (default)
-dataset = rindle.get_dataset(manifest)
+dataset = rindle.get_dataset(manifest)  # parallelized tensor fill
 
 # Load a random 10% sample (maintains ticker distribution)
 dataset_small = rindle.get_dataset(manifest, percentage=0.1)
+
+# Explicit thread count (0 = auto-detect)
+dataset = rindle.get_dataset(manifest, thread_count=4)
 
 X = dataset.X  # NumPy array: (windows, seq_length, n_features), dtype=float32
 Y = dataset.Y  # NumPy array aligned with X when targets are enabled
@@ -116,8 +123,8 @@ deviation, quartiles, and min/max bounds).
 | Function | Description |
 | --- | --- |
 | `rindle.create_config(...)` | Validate paths, choose feature columns, configure window geometry and scaling. Returns a `DatasetConfig`. |
-| `rindle.build_dataset(config)` | Run discovery → scaling → windowing and return a `ManifestContent`. |
-| `rindle.get_dataset(manifest_or_path, percentage=1.0)` | Load feature/target tensors. Optional `percentage` (0.0 < p <= 1.0) loads a random subset of windows per ticker. |
+| `rindle.build_dataset(config, thread_count=0)` | Run discovery → scaling → windowing in parallel and return a `ManifestContent`. |
+| `rindle.get_dataset(manifest_or_path, percentage=1.0, thread_count=0)` | Load feature/target tensors in parallel. Optional `percentage` (0.0 < p <= 1.0) loads a random subset of windows per ticker. |
 | `rindle.get_feature_scaler(manifest_or_path, ticker, feature)` | Retrieve the fitted scaler for a ticker/feature pair to apply or invert scaling. |
 | `rindle.inverse_transform_value(scaler, value)` | Convenience helper to undo scaling with a `FittedScaler`. |
 

@@ -16,12 +16,15 @@ from C++ or Python.
    columns, and choose window geometry and scaling options.
 2. **Build** – pass the configuration to `rindle::build_dataset`; the driver
    discovers tickers, fits scalers, writes window manifests, and emits
-   `manifest.json` summarizing the build.
+   `manifest.json` summarizing the build. Tickers are processed in parallel.
 3. **Load** – use `rindle::get_dataset` with the manifest to materialize feature
-   and target tensors in memory for model training or analysis.
+   and target tensors in memory for model training or analysis. Manifest reading,
+   CSV loading, and tensor filling are all parallelized.
 
-The C++ API is mirrored in the optional Python bindings, enabling the same flow
-from notebooks or scripts.
+Both `build_dataset` and `get_dataset` accept an optional `thread_count`
+parameter (default `0` = auto-detect from hardware). The C++ API is mirrored in
+the optional Python bindings, which release the GIL during long-running
+operations so other Python threads remain responsive.
 
 ## Install (PyPI)
 
@@ -101,7 +104,7 @@ src/            # Library implementation and internal headers
 src/python/     # pybind11 bindings for the public API
 examples/       # End-to-end usage demonstrations (C++ and Python)
 data/           # Sample raw/processed directories for experimentation
-tests/          # Catch2 test harness (placeholder)
+tests/          # Catch2 unit and integration tests + Python binding tests
 ```
 
 ## Building the library
@@ -115,16 +118,26 @@ cmake --build build
 ```
 
 The project targets C++20, fetches `nlohmann_json`, and optionally brings in
-Catch2 and pybind11 for tests and bindings. Use
-`cmake --build build --target rindle_tests` followed by `ctest --test-dir build`
-to run the test suite when implemented.
+Catch2 and pybind11 for tests and bindings. Run the test suite with:
+
+```bash
+cmake --build build --target rindle_tests
+ctest --test-dir build --output-on-failure
+```
+
+Python binding tests use pytest:
+
+```bash
+PYTHONPATH=build python -m pytest tests/test_python_bindings.py -v
+```
 
 ## Python bindings
 
 Enable `RINDLE_BUILD_PYTHON` to build the `rindle` Python module. The bindings
 expose tensor views as NumPy arrays while reusing the same configuration and
-loading APIs as C++. The generated extension
-module is placed in the build tree (e.g., `build/src/python/rindle.*`).
+loading APIs as C++. The GIL is released during `build_dataset` and `get_dataset`
+so other Python threads stay responsive. The generated extension module is placed
+in the build tree (e.g., `build/src/python/rindle.*`).
 
 ## Distributing on PyPI or installing via pip
 
