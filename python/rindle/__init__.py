@@ -22,4 +22,4 @@ def __dir__():
 try:
     __version__ = _metadata.version("rindle")
 except _metadata.PackageNotFoundError:  # pragma: no cover - local editable installs
-    __version__ = "1.0.0"
+    __version__ = "1.0.1"
