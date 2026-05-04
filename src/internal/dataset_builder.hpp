@@ -8,6 +8,7 @@
 #include "window_manifest.hpp"
 #include "window_maker.hpp"
 #include "rindle/dataset_types.hpp"
+#include "rindle/manifest_types.hpp"
 
 namespace rivulet {
 
@@ -44,6 +45,9 @@ struct BuildPlan {
 class DatasetBuilder {
 public:
   DatasetBuilder() = default;
+  explicit DatasetBuilder(const ManifestContent& mc) : manifest_content_(&mc) {}
+
+  void set_manifest(const ManifestContent& mc) { manifest_content_ = &mc; }
 
   // 1) Derive sizes by streaming windows (no CSV value reads here).
   //    Uses make_windows_streaming to avoid holding all WindowRow in memory.
@@ -84,6 +88,8 @@ private:
                           std::int64_t seq_len,
                           std::vector<float>& out_flat,   // size = seq_len*target_count
                           std::string* error_msg) const;
+
+  const ManifestContent* manifest_content_ = nullptr;
 };
 
 } // namespace rivulet

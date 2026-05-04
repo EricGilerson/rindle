@@ -62,7 +62,10 @@ Result<DatasetConfig> create_config(
  * @param config Dataset configuration (must be created via create_config)
  * @return Result containing ManifestContent on success
  */
-Result<ManifestContent> build_dataset(const DatasetConfig& config);
+Result<ManifestContent> build_dataset(
+    const DatasetConfig& config,
+    unsigned int thread_count = 0
+);
 
 /**
  * 3. Get dataset tensors from built dataset
@@ -83,12 +86,14 @@ Result<ManifestContent> build_dataset(const DatasetConfig& config);
  */
 Result<Dataset> get_dataset(
     const ManifestContent& manifest,
-    double percentage = 1.0
+    double percentage = 1.0,
+    unsigned int thread_count = 0
 );
 
 Result<Dataset> get_dataset(
     const std::filesystem::path& manifest_path,
-    double percentage = 1.0
+    double percentage = 1.0,
+    unsigned int thread_count = 0
 );
 
 Result<FittedScaler> get_feature_scaler(

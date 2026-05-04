@@ -20,23 +20,19 @@ Overview:
 #include "internal/window_maker.hpp"
 #include <filesystem>
 #include <limits>
-#include "internal/driver.hpp"
 
 namespace rivulet {
   bool build_and_write_manifest_parquet(const WindowSpec& spec,
                                         const std::string& manifest_path,
-                                        std::string* error_msg) {
+                                        std::string* error_msg,
+                                        const ManifestContent& manifest_content) {
     if (error_msg) *error_msg = {};
 
-    // Define a sink that appends each streamed row to the manifest file.
-    // Return false only on I/O failure (so we don't stop early by design).
     auto sink = [&](const WindowRow& row) -> bool {
       return append_windows_manifest_parquet(manifest_path, row, error_msg);
     };
 
-    // Produce windows and push them directly to the sink.
-    // On failure, error_msg is already set (I/O or generator constraint).
-    if (!make_windows_streaming(spec, sink, error_msg)) {
+    if (!make_windows_streaming(spec, sink, error_msg, manifest_content)) {
       if (error_msg && error_msg->empty()) {
         *error_msg = "make_windows_streaming failed";
       }
@@ -48,7 +44,8 @@ namespace rivulet {
 
 
   std::vector<WindowRow> make_windows(const WindowSpec& spec,
-                                      std::string* error_msg) {
+                                      std::string* error_msg,
+                                      const ManifestContent& manifest_content) {
     std::vector<WindowRow> all_windows;
     for (const auto& ticker : spec.tickers) {
       SingleTickerWindowSpec single_spec{
@@ -58,15 +55,14 @@ namespace rivulet {
         .horizon_ns = spec.horizon_ns,
         .with_targets = spec.with_targets,
       };
-      const TickerStats *stats = manifest.content().find_stats(ticker);
+      const TickerStats *stats = manifest_content.find_stats(ticker);
       if (!stats) {
         if (error_msg) *error_msg = "No TickerStats found for ticker: " + ticker;
         return {};
       }
 
-      //get ticker stats for that ticker
       auto windows = make_windows_for_ticker(single_spec, error_msg, stats);
-      if (!error_msg->empty()) {
+      if (error_msg && !error_msg->empty()) {
         return {};
       }
       all_windows.insert(all_windows.end(), windows.begin(), windows.end());
@@ -128,7 +124,8 @@ namespace rivulet {
 
 bool make_windows_streaming(const WindowSpec &spec,
                             const WindowSink &sink,
-                            std::string *error_msg) {
+                            std::string *error_msg,
+                            const ManifestContent& manifest_content) {
   if (error_msg) error_msg->clear();
 
   for (const auto& ticker : spec.tickers) {
@@ -140,16 +137,13 @@ bool make_windows_streaming(const WindowSpec &spec,
       .with_targets = spec.with_targets
     };
 
-    // Lookup stats for this ticker
-    const TickerStats* stats = manifest.content().find_stats(ticker);
+    const TickerStats* stats = manifest_content.find_stats(ticker);
     if (!stats) {
       if (error_msg) *error_msg = "No TickerStats found for ticker: " + ticker;
       return false;
     }
 
-    // Stream all windows for this ticker
-    if (!make_windows_for_ticker_streaming(single_spec, sink, error_msg)) {
-      // error_msg already set by callee on failure or early stop
+    if (!make_windows_for_ticker_streaming(single_spec, sink, error_msg, manifest_content)) {
       return false;
     }
   }
@@ -159,11 +153,11 @@ bool make_windows_streaming(const WindowSpec &spec,
 
 bool make_windows_for_ticker_streaming(const SingleTickerWindowSpec &spec,
                                        const WindowSink &sink,
-                                       std::string *error_msg) {
+                                       std::string *error_msg,
+                                       const ManifestContent& manifest_content) {
   if (error_msg) error_msg->clear();
 
-  // Retrieve stats for this ticker (needed for input_rows bound)
-  const TickerStats* stats = manifest.content().find_stats(spec.ticker);
+  const TickerStats* stats = manifest_content.find_stats(spec.ticker);
   if (!stats) {
     if (error_msg) *error_msg = "No TickerStats found for ticker: " + spec.ticker;
     return false;

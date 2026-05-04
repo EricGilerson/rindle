@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "rindle/types.hpp"
+#include "rindle/manifest_types.hpp"
 #include "window_manifest.hpp"
 
 namespace rivulet {
@@ -65,7 +66,8 @@ using WindowSink = std::function<bool(const WindowRow&)>;
 
 bool make_windows_for_ticker_streaming(const SingleTickerWindowSpec& spec,
                                        const WindowSink& sink,
-                                       std::string* error_msg);
+                                       std::string* error_msg,
+                                       const ManifestContent& manifest_content);
 
 /**
  * Generate windows for ALL tickers specified in the WindowSpec.
@@ -78,7 +80,8 @@ bool make_windows_for_ticker_streaming(const SingleTickerWindowSpec& spec,
  * Returns an empty vector on error and fills error_msg.
  */
 std::vector<WindowRow> make_windows(const WindowSpec& spec,
-                                    std::string* error_msg);
+                                    std::string* error_msg,
+                                    const ManifestContent& manifest_content);
 
 /**
  * Streaming variant for multiple tickers.
@@ -88,7 +91,8 @@ std::vector<WindowRow> make_windows(const WindowSpec& spec,
  */
 bool make_windows_streaming(const WindowSpec& spec,
                             const WindowSink& sink,
-                            std::string* error_msg);
+                            std::string* error_msg,
+                            const ManifestContent& manifest_content);
 
 /**
  * Parallel variant for multiple tickers.

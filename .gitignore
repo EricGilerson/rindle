@@ -31,3 +31,6 @@ manifest.json
 source
 .resolv
 /.idea
+/build-python/_deps
+/build-python
+/build-test

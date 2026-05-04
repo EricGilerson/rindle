@@ -235,28 +235,37 @@ PYBIND11_MODULE(rindle, m) {
 
   m.def(
       "build_dataset",
-      [](const rv::DatasetConfig &config) {
-        return unwrap(rv::build_dataset(config), "build_dataset");
+      [](const rv::DatasetConfig &config, unsigned int thread_count) {
+        rv::Result<rv::ManifestContent> result;
+        { py::gil_scoped_release release; result = rv::build_dataset(config, thread_count); }
+        return unwrap(std::move(result), "build_dataset");
       },
-      py::arg("config"),
+      py::arg("config"), py::arg("thread_count") = 0,
       "Run the dataset build pipeline and return the manifest");
 
   m.def(
       "get_dataset",
-      [](const rv::ManifestContent &manifest, double percentage) {
-        return unwrap(rv::get_dataset(manifest, percentage), "get_dataset");
+      [](const rv::ManifestContent &manifest, double percentage,
+         unsigned int thread_count) {
+        rv::Result<rv::Dataset> result;
+        { py::gil_scoped_release release; result = rv::get_dataset(manifest, percentage, thread_count); }
+        return unwrap(std::move(result), "get_dataset");
       },
       py::arg("manifest"), py::arg("percentage") = 1.0,
+      py::arg("thread_count") = 0,
       "Load dataset tensors from a manifest object, optionally specifying a "
       "percentage of data to load");
 
   m.def(
       "get_dataset",
-      [](const std::filesystem::path &manifest_path, double percentage) {
-        return unwrap(rv::get_dataset(manifest_path, percentage),
-                      "get_dataset");
+      [](const std::filesystem::path &manifest_path, double percentage,
+         unsigned int thread_count) {
+        rv::Result<rv::Dataset> result;
+        { py::gil_scoped_release release; result = rv::get_dataset(manifest_path, percentage, thread_count); }
+        return unwrap(std::move(result), "get_dataset");
       },
       py::arg("manifest_path"), py::arg("percentage") = 1.0,
+      py::arg("thread_count") = 0,
       "Load dataset tensors from a manifest file path, optionally specifying a "
       "percentage of data to load");
 

@@ -58,6 +58,12 @@ namespace rivulet {
     void Catalog::record_ticker_stats(const TickerStats& stats) {
         stats_.push_back(stats);
     }
+    void Catalog::prepare_stats_slots(std::size_t count) {
+        stats_.resize(count);
+    }
+    void Catalog::record_ticker_stats_at(std::size_t index, TickerStats stats) {
+        stats_[index] = std::move(stats);
+    }
     std::size_t Catalog::total_windows_created() const {
         std::size_t total = 0;
         for (const auto& s : stats_) {

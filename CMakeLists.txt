@@ -42,6 +42,7 @@ if(RINDLE_ENABLE_ASAN AND CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 
 # Dependencies
+find_package(Threads REQUIRED)
 include(FetchContent)
 
 FetchContent_Declare(
@@ -67,6 +68,7 @@ add_library(rindle STATIC
         src/internal/driver.hpp
         src/internal/window_manifest.hpp
         src/internal/dataset_builder.hpp
+        src/internal/thread_pool.hpp
 
         # Sources
         src/scaler.cpp
@@ -90,7 +92,7 @@ target_include_directories(rindle
 )
 
 target_link_libraries(rindle
-        PUBLIC nlohmann_json::nlohmann_json
+        PUBLIC nlohmann_json::nlohmann_json Threads::Threads
 )
 
 set_target_properties(rindle PROPERTIES POSITION_INDEPENDENT_CODE ON)

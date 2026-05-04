@@ -32,12 +32,9 @@ namespace rivulet {
         std::size_t total_rows = 0;
     };
 
-    // Global manifest accessible to window_maker
-    inline Manifest manifest;
-
     class Driver {
     public:
-        explicit Driver(DatasetConfig config);
+        explicit Driver(DatasetConfig config, unsigned int thread_count = 0);
 
         // Main entry point: run the full pipeline
         DriverResult run();
@@ -47,12 +44,14 @@ namespace rivulet {
 
     private:
         DatasetConfig config_;
+        unsigned int thread_count_;
         Catalog catalog_;
         Manifest manifest_;
 
-        // Process a single ticker
+        // Process a single ticker (index is used for thread-safe stats recording)
         bool process_ticker(
             const WorkItem& item,
+            std::size_t index,
             std::string& error_msg
         );
 

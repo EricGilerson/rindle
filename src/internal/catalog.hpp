@@ -42,6 +42,8 @@ namespace rivulet {
 
         // Track statistics
         void record_ticker_stats(const TickerStats& stats);
+        void prepare_stats_slots(std::size_t count);
+        void record_ticker_stats_at(std::size_t index, TickerStats stats);
         const std::vector<TickerStats>& all_stats() const { return stats_; }
 
         // Summary

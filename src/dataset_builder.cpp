@@ -41,8 +41,11 @@ BuildPlan DatasetBuilder::make_plan(const WindowSpec& wspec,
       return true;
     };
 
-    if (!make_windows_for_ticker_streaming(single, counter_sink, error_msg)) {
-      // error_msg already set by callee if needed
+    if (!manifest_content_) {
+      if (error_msg) *error_msg = "DatasetBuilder has no manifest set";
+      return plan;
+    }
+    if (!make_windows_for_ticker_streaming(single, counter_sink, error_msg, *manifest_content_)) {
       return plan;
     }
 
@@ -132,8 +135,11 @@ bool DatasetBuilder::fill_data(const WindowSpec& wspec,
     return true;
   };
 
-  if (!make_windows_streaming(wspec, sink, error_msg)) {
-    // If the sink stopped us due to max_windows, treat as success.
+  if (!manifest_content_) {
+    if (error_msg) *error_msg = "DatasetBuilder has no manifest set";
+    return false;
+  }
+  if (!make_windows_streaming(wspec, sink, error_msg, *manifest_content_)) {
     if (error_msg && !error_msg->empty()) return false;
   }
 
@@ -160,21 +166,23 @@ Dataset DatasetBuilder::build_for_ticker(const std::string& ticker,
 
   return build(w, dspec, error_msg);
 }
-// naive placeholder — replace with your real resolver (e.g., Catalog/Manifest)
+
+} // namespace rivulet
+
+namespace {
+
 inline std::filesystem::path resolve_csv_path_for_ticker(const std::string& ticker) {
   return std::filesystem::path(ticker + ".csv");
 }
 
-// cache: ticker -> loaded frame
 struct CsvCache {
   std::unordered_map<std::string, std::shared_ptr<rivulet::CsvFrame>> frames;
   bool ensure_loaded(const std::string& ticker, std::string* error_msg) {
     if (frames.find(ticker) != frames.end()) return true;
     auto frame = std::make_shared<rivulet::CsvFrame>();
     std::string err;
-    rivulet::CsvIO io;
     const auto path = resolve_csv_path_for_ticker(ticker);
-    if (!io.read_time_series_csv(path, frame.get(), err)) {
+    if (!rivulet::CsvIO::read_time_series_csv(path, frame.get(), err)) {
       if (error_msg) *error_msg = err;
       return false;
     }
@@ -187,9 +195,10 @@ struct CsvCache {
   }
 };
 
+thread_local CsvCache tl_cache;
+
 inline CsvCache& cache() {
-  static CsvCache c;
-  return c;
+  return tl_cache;
 }
 
 } // namespace
@@ -272,4 +281,4 @@ bool rivulet::DatasetBuilder::read_targets_block(const std::string& ticker,
     }
   }
   return true;
-}// namespace rivulet
+}

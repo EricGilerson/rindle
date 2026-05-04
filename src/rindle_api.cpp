@@ -1,10 +1,10 @@
 #include "rindle.hpp"
 
-// Internal headers (users cannot access these)
 #include "internal/catalog.hpp"
 #include "internal/csv_io.hpp"
 #include "internal/driver.hpp"
 #include "internal/manifest.hpp"
+#include "internal/thread_pool.hpp"
 #include "internal/window_manifest.hpp"
 
 #include <algorithm>
@@ -15,6 +15,7 @@
 #include <numeric>
 #include <random>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -83,9 +84,9 @@ create_config(const std::filesystem::path &input_dir,
 
 // 2. build_dataset - Execute full pipeline
 
-Result<ManifestContent> build_dataset(const DatasetConfig &config) {
-  // Create driver with the config
-  Driver driver(config);
+Result<ManifestContent> build_dataset(const DatasetConfig &config,
+                                     unsigned int thread_count) {
+  Driver driver(config, thread_count);
 
   // Run the complete pipeline:
   // 1. Catalog discovers all CSV files
@@ -102,20 +103,16 @@ Result<ManifestContent> build_dataset(const DatasetConfig &config) {
     return Result<ManifestContent>{std::nullopt, Status::Error(result.message)};
   }
 
-  // Get the manifest that was built during the run
-  // The Driver stores it in a global 'manifest' variable (as per driver.hpp)
-  const ManifestContent &manifest_content = manifest.content();
+  const ManifestContent &manifest_content = driver.get_manifest().content();
 
   return Result<ManifestContent>{manifest_content, Status::OK()};
 }
 
-// 3. get_dataset - Load tensors from built dataset
+// 3. get_dataset - Load tensors from built dataset (parallelized)
 
 Result<Dataset> get_dataset(const ManifestContent &manifest_content,
-                            double percentage) {
-  std::string error_msg;
-
-  // Validate percentage
+                            double percentage,
+                            unsigned int thread_count) {
   if (percentage <= 0.0 || percentage > 1.0) {
     return Result<Dataset>{
         std::nullopt,
@@ -123,7 +120,6 @@ Result<Dataset> get_dataset(const ManifestContent &manifest_content,
             "Percentage must be between 0.0 (exclusive) and 1.0 (inclusive)")};
   }
 
-  // Validate manifest
   if (manifest_content.total_windows == 0) {
     return Result<Dataset>{std::nullopt,
                            Status::Error("Manifest reports zero windows")};
@@ -143,59 +139,11 @@ Result<Dataset> get_dataset(const ManifestContent &manifest_content,
                                          manifest_content.input_dir.string())};
   }
 
-  // Prepare dataset structure
-  Dataset dataset;
-
   const std::size_t n_features = manifest_content.feature_columns.size();
   const std::size_t seq_len = manifest_content.seq_length;
   const bool has_target = manifest_content.target_column.has_value();
 
-  std::vector<WindowRow> all_windows;
-  std::size_t total_windows = 0;
-
-  // Cache for loaded CSV data (ticker -> CsvFrame)
-  std::unordered_map<std::string, CsvFrame> csv_cache;
-  std::unordered_map<std::string, std::vector<ScalerParams>>
-      ticker_scaler_params;
-  std::string scaler_error;
-
-  auto fetch_scalers_for_ticker =
-      [&](const std::string &ticker) -> const std::vector<ScalerParams> * {
-    auto existing = ticker_scaler_params.find(ticker);
-    if (existing != ticker_scaler_params.end()) {
-      return &existing->second;
-    }
-
-    const TickerStats *stats = manifest_content.find_stats(ticker);
-    if (!stats) {
-      scaler_error = "Scaler parameters missing for ticker: " + ticker;
-      return nullptr;
-    }
-
-    std::unordered_map<std::string, const ScalerParams *> feature_lookup;
-    feature_lookup.reserve(stats->feature_scalers.size());
-    for (const auto &feature_params : stats->feature_scalers) {
-      feature_lookup.emplace(feature_params.feature, &feature_params.params);
-    }
-
-    std::vector<ScalerParams> ordered_params;
-    ordered_params.reserve(n_features);
-    for (const auto &feature_name : manifest_content.feature_columns) {
-      auto feature_it = feature_lookup.find(feature_name);
-      if (feature_it == feature_lookup.end()) {
-        scaler_error = "Scaler parameters missing for feature '" +
-                       feature_name + "' in ticker " + ticker;
-        return nullptr;
-      }
-      ordered_params.push_back(*feature_it->second);
-    }
-
-    auto inserted =
-        ticker_scaler_params.emplace(ticker, std::move(ordered_params));
-    return &inserted.first->second;
-  };
-
-  // Build lookup map from normalized ticker -> input CSV path
+  // Build normalized ticker -> input CSV path map (sequential, fast)
   auto normalize_ticker = [](const std::filesystem::path &path) {
     std::string filename = path.stem().string();
     std::string ticker;
@@ -215,317 +163,310 @@ Result<Dataset> get_dataset(const ManifestContent &manifest_content,
     if (!entry.is_regular_file() || entry.path().extension() != ".csv") {
       continue;
     }
-
     std::string ticker = normalize_ticker(entry.path());
     if (!ticker.empty() && !ticker_to_input_path.count(ticker)) {
       ticker_to_input_path.emplace(std::move(ticker), entry.path());
     }
   }
 
-  // Read window manifests for each ticker
-  for (const auto &ticker_stats : manifest_content.ticker_stats) {
-    const std::string &ticker = ticker_stats.ticker;
+  // ============================================================
+  // Phase 1: Parallel manifest read + subsample
+  // ============================================================
+  struct TickerWindowResult {
+    std::vector<WindowRow> windows;
+    std::string error;
+  };
 
-    // Path to this ticker's window manifest:
-    // output_dir/{ticker}_windows.parquet
-    std::filesystem::path window_manifest_path =
-        manifest_content.output_dir / (ticker + "_windows.parquet");
+  const std::size_t n_tickers = manifest_content.ticker_stats.size();
+  std::vector<TickerWindowResult> ticker_results(n_tickers);
 
-    if (!std::filesystem::exists(window_manifest_path)) {
-      return Result<Dataset>{
-          std::nullopt,
-          Status::Error("Window manifest not found for ticker: " + ticker +
-                        " at " + window_manifest_path.string())};
+  {
+    ThreadPool pool(thread_count);
+    pool.parallel_for(n_tickers, [&](std::size_t t) {
+      const auto &ts = manifest_content.ticker_stats[t];
+      const std::string &ticker = ts.ticker;
+      auto &result = ticker_results[t];
+
+      std::filesystem::path window_manifest_path =
+          manifest_content.output_dir / (ticker + "_windows.parquet");
+
+      if (!std::filesystem::exists(window_manifest_path)) {
+        result.error = "Window manifest not found for ticker: " + ticker +
+                       " at " + window_manifest_path.string();
+        return;
+      }
+
+      std::vector<WindowRow> ticker_windows;
+      std::string err;
+      if (!read_windows_manifest_parquet(window_manifest_path.string(),
+                                         &ticker_windows, &err)) {
+        result.error = "Failed to read window manifest: " +
+                       window_manifest_path.string() +
+                       (err.empty() ? std::string() : (": " + err));
+        return;
+      }
+
+      const std::size_t total_ticker_windows = ticker_windows.size();
+      const std::size_t keep_count = static_cast<std::size_t>(
+          std::ceil(static_cast<double>(total_ticker_windows) * percentage));
+
+      std::size_t actual_keep = std::min(keep_count, total_ticker_windows);
+      if (actual_keep == 0 && total_ticker_windows > 0 && percentage > 0) {
+        actual_keep = 1;
+      }
+
+      std::vector<std::size_t> indices(total_ticker_windows);
+      std::iota(indices.begin(), indices.end(), 0);
+
+      std::random_device rd;
+      std::mt19937 g(rd());
+      std::shuffle(indices.begin(), indices.end(), g);
+
+      result.windows.reserve(actual_keep);
+      for (std::size_t i = 0; i < actual_keep; ++i) {
+        auto &row = ticker_windows[indices[i]];
+        row.ticker = ticker;
+        result.windows.push_back(std::move(row));
+      }
+    });
+  }
+
+  // Merge results and check for errors
+  std::vector<WindowRow> all_windows;
+  for (auto &tr : ticker_results) {
+    if (!tr.error.empty()) {
+      return Result<Dataset>{std::nullopt, Status::Error(tr.error)};
     }
+    all_windows.insert(all_windows.end(),
+                       std::make_move_iterator(tr.windows.begin()),
+                       std::make_move_iterator(tr.windows.end()));
+  }
+  ticker_results.clear();
 
-    std::vector<WindowRow> ticker_windows;
-    if (!read_windows_manifest_parquet(window_manifest_path.string(),
-                                       &ticker_windows, &error_msg)) {
-      return Result<Dataset>{
-          std::nullopt,
-          Status::Error(
-              "Failed to read window manifest: " +
-              window_manifest_path.string() +
-              (error_msg.empty() ? std::string() : (": " + error_msg)))};
-    }
+  const std::size_t total_windows = all_windows.size();
+  if (total_windows == 0) {
+    return Result<Dataset>{std::nullopt,
+                           Status::Error("No windows after subsampling")};
+  }
 
-    // Calculate how many windows to keep for this ticker
-    // We do this per-ticker to maintain the dataset distribution
-    const std::size_t total_ticker_windows = ticker_windows.size();
-    const std::size_t keep_count = static_cast<std::size_t>(
-        std::ceil(static_cast<double>(total_ticker_windows) * percentage));
+  // ============================================================
+  // Phase 2: Parallel CSV pre-loading
+  // ============================================================
+  std::unordered_set<std::string> needed_tickers;
+  for (const auto &w : all_windows) needed_tickers.insert(w.ticker);
 
-    // Ensure we keep at least one window if the ticker has any, and percentage
-    // > 0
-    std::size_t actual_keep = std::min(keep_count, total_ticker_windows);
-    if (actual_keep == 0 && total_ticker_windows > 0 && percentage > 0) {
-      actual_keep = 1;
-    }
+  std::vector<std::string> ticker_list(needed_tickers.begin(),
+                                       needed_tickers.end());
+  needed_tickers.clear();
 
-    // Create indices vector [0, 1, ..., N-1]
-    std::vector<std::size_t> indices(total_ticker_windows);
-    std::iota(indices.begin(), indices.end(), 0);
+  // Pre-allocate cache entries so map won't rehash during parallel writes
+  std::unordered_map<std::string, CsvFrame> csv_cache;
+  csv_cache.reserve(ticker_list.size());
+  for (const auto &t : ticker_list) csv_cache[t] = CsvFrame{};
 
-    // Shuffle indices deterministically for reproducibility (or randomly?)
-    // The user asked for "Random", so we use std::random_device.
-    // Ideally we might want a seed parameter, but for now strict random is
-    // requested.
-    std::random_device rd;
-    std::mt19937 g(rd());
-    std::shuffle(indices.begin(), indices.end(), g);
+  std::vector<std::string> load_errors(ticker_list.size());
 
-    // Pick the first 'actual_keep' random indices (after sort)
-    // OR just iterate the shuffled indices. We just need to add them.
-    // Wait, if we want to preserve TIME ORDER in the final dataset (relative to
-    // other windows if needed), we might want to sort the selected indices
-    // back. However, the current code just appends to `all_windows`.
-    // `all_windows` is then used to load data. The order in `all_windows`
-    // determines the order in X/Y tensors. If we want the final dataset to be
-    // shuffled, we can just append in shuffled order. If we want the final
-    // dataset to be time-ordered within ticker but subsampled, we should sort
-    // the selected indices. The user just said "Shuffle and pick random
-    // windows". Usually deep learning datasets are shuffled anyway. But let's
-    // check if we want to sort indices to keep them time-ordered? Let's assume
-    // sending them in shuffled order is fine.
+  {
+    ThreadPool pool(thread_count);
+    pool.parallel_for(ticker_list.size(), [&](std::size_t i) {
+      const auto &ticker = ticker_list[i];
+      auto path_it = ticker_to_input_path.find(ticker);
+      if (path_it == ticker_to_input_path.end()) {
+        load_errors[i] = "Cannot find input CSV for ticker: " + ticker;
+        return;
+      }
+      std::string err;
+      if (!CsvIO::read_time_series_csv(path_it->second, &csv_cache[ticker],
+                                        err)) {
+        load_errors[i] = "Failed to read CSV for ticker " + ticker + ": " + err;
+      }
+    });
+  }
 
-    for (std::size_t i = 0; i < actual_keep; ++i) {
-      std::size_t original_index = indices[i];
-      auto &row = ticker_windows[original_index];
-      row.ticker = ticker;
-      all_windows.push_back(row);
-      total_windows++;
+  for (const auto &err : load_errors) {
+    if (!err.empty()) {
+      return Result<Dataset>{std::nullopt, Status::Error(err)};
     }
   }
 
-  // Allocate tensors
+  // Build feature_name -> column_index maps per ticker (eliminates O(n) std::find)
+  std::unordered_map<std::string, std::unordered_map<std::string, std::size_t>>
+      ticker_feature_idx;
+  for (const auto &[ticker, frame] : csv_cache) {
+    auto &idx_map = ticker_feature_idx[ticker];
+    idx_map.reserve(frame.feature_names.size());
+    for (std::size_t c = 0; c < frame.feature_names.size(); ++c) {
+      idx_map[frame.feature_names[c]] = c;
+    }
+  }
+
+  // Pre-compute ordered scaler params per ticker
+  std::unordered_map<std::string, std::vector<ScalerParams>>
+      ticker_scaler_params;
+  for (const auto &ticker : ticker_list) {
+    const TickerStats *stats = manifest_content.find_stats(ticker);
+    if (!stats) {
+      return Result<Dataset>{
+          std::nullopt,
+          Status::Error("Scaler parameters missing for ticker: " + ticker)};
+    }
+
+    std::unordered_map<std::string, const ScalerParams *> feature_lookup;
+    feature_lookup.reserve(stats->feature_scalers.size());
+    for (const auto &fp : stats->feature_scalers) {
+      feature_lookup.emplace(fp.feature, &fp.params);
+    }
+
+    std::vector<ScalerParams> ordered_params;
+    ordered_params.reserve(n_features);
+    for (const auto &feature_name : manifest_content.feature_columns) {
+      auto it = feature_lookup.find(feature_name);
+      if (it == feature_lookup.end()) {
+        return Result<Dataset>{
+            std::nullopt,
+            Status::Error("Scaler parameters missing for feature '" +
+                          feature_name + "' in ticker " + ticker)};
+      }
+      ordered_params.push_back(*it->second);
+    }
+    ticker_scaler_params[ticker] = std::move(ordered_params);
+  }
+
+  // Pre-validate: check all frames have required features and enough rows
+  for (const auto &w : all_windows) {
+    const auto &frame = csv_cache.at(w.ticker);
+    const auto &idx_map = ticker_feature_idx.at(w.ticker);
+
+    for (const auto &fname : manifest_content.feature_columns) {
+      if (idx_map.find(fname) == idx_map.end()) {
+        return Result<Dataset>{
+            std::nullopt,
+            Status::Error("Feature column not found in CSV: " + fname)};
+      }
+    }
+
+    if (has_target && manifest_content.target_column.has_value()) {
+      if (idx_map.find(*manifest_content.target_column) == idx_map.end()) {
+        return Result<Dataset>{
+            std::nullopt,
+            Status::Error("Target column not found in CSV: " +
+                          *manifest_content.target_column)};
+      }
+    }
+
+    if (w.window_end < 0) {
+      return Result<Dataset>{std::nullopt,
+                             Status::Error("Window end index is negative")};
+    }
+    const auto required_rows = static_cast<std::size_t>(w.window_end) + 1;
+    if (frame.features.empty() || frame.features[0].size() < required_rows) {
+      return Result<Dataset>{
+          std::nullopt,
+          Status::Error("Not enough rows in CSV for window [" +
+                        std::to_string(w.window_start) + ", " +
+                        std::to_string(w.window_end) + "]")};
+    }
+
+    if (has_target && w.target_start.has_value()) {
+      const auto target_end_row = static_cast<std::size_t>(
+          *w.target_start +
+          static_cast<std::int64_t>(manifest_content.future_horizon));
+      const auto &target_col = *manifest_content.target_column;
+      std::size_t tcol = idx_map.at(target_col);
+      if (frame.features[tcol].size() < target_end_row) {
+        return Result<Dataset>{
+            std::nullopt,
+            Status::Error("Target rows out of bounds for ticker " + w.ticker)};
+      }
+    }
+  }
+
+  // ============================================================
+  // Phase 3: Allocate tensors + parallel fill
+  // ============================================================
   if (total_windows >
       static_cast<std::size_t>(std::numeric_limits<std::int64_t>::max())) {
     return Result<Dataset>{
         std::nullopt,
         Status::Error("Number of windows exceeds supported range")};
   }
-  if (seq_len >
-      static_cast<std::size_t>(std::numeric_limits<std::int64_t>::max())) {
-    return Result<Dataset>{
-        std::nullopt, Status::Error("Sequence length exceeds supported range")};
-  }
-  if (n_features >
-      static_cast<std::size_t>(std::numeric_limits<std::int64_t>::max())) {
-    return Result<Dataset>{
-        std::nullopt, Status::Error("Feature count exceeds supported range")};
-  }
 
   const auto total_windows_i64 = static_cast<std::int64_t>(total_windows);
   const auto seq_len_i64 = static_cast<std::int64_t>(seq_len);
   const auto n_features_i64 = static_cast<std::int64_t>(n_features);
 
+  Dataset dataset;
   dataset.X.reshape(total_windows_i64, seq_len_i64, n_features_i64);
 
   std::int64_t future_horizon_i64 = 0;
   if (has_target) {
-    if (manifest_content.future_horizon >
-        static_cast<std::size_t>(std::numeric_limits<std::int64_t>::max())) {
-      return Result<Dataset>{
-          std::nullopt,
-          Status::Error("Future horizon exceeds supported range")};
-    }
     future_horizon_i64 =
         static_cast<std::int64_t>(manifest_content.future_horizon);
     dataset.Y.reshape(total_windows_i64, future_horizon_i64,
                       static_cast<std::int64_t>(1));
   }
-  dataset.meta.reserve(total_windows);
+  dataset.meta.resize(total_windows);
 
-  // Now fill tensors by reading actual CSV data from INPUT directory
-  for (std::size_t w = 0; w < all_windows.size(); ++w) {
-    const auto w_i64 = static_cast<std::int64_t>(w);
-    const auto &window_row = all_windows[w];
+  {
+    ThreadPool pool(thread_count);
+    pool.parallel_for(total_windows, [&](std::size_t w) {
+      const auto w_i64 = static_cast<std::int64_t>(w);
+      const auto &window_row = all_windows[w];
+      const CsvFrame &frame = csv_cache.at(window_row.ticker);
+      const auto &idx_map = ticker_feature_idx.at(window_row.ticker);
+      const auto &scaler_params = ticker_scaler_params.at(window_row.ticker);
 
-    // Store metadata
-    WindowMeta meta;
-    meta.ticker = window_row.ticker;
-    meta.start_row = window_row.window_start;
-    meta.end_row = window_row.window_end;
-    meta.target_start = window_row.target_start;
-    meta.target_end = window_row.target_end;
-    dataset.meta.push_back(meta);
+      // Fill metadata
+      WindowMeta &meta = dataset.meta[w];
+      meta.ticker = window_row.ticker;
+      meta.start_row = window_row.window_start;
+      meta.end_row = window_row.window_end;
+      meta.target_start = window_row.target_start;
+      meta.target_end = window_row.target_end;
 
-    // Check if we've already loaded this ticker's CSV
-    CsvFrame *frame_ptr = nullptr;
-    auto cache_it = csv_cache.find(window_row.ticker);
+      // Fill X tensor
+      for (std::int64_t s = 0; s < seq_len_i64; ++s) {
+        const auto row_idx =
+            static_cast<std::size_t>(window_row.window_start + s);
 
-    if (cache_it == csv_cache.end()) {
-      auto path_it = ticker_to_input_path.find(window_row.ticker);
-      if (path_it == ticker_to_input_path.end()) {
-        return Result<Dataset>{
-            std::nullopt,
-            Status::Error("Cannot find original input CSV for ticker: " +
-                          window_row.ticker)};
-      }
-
-      const std::filesystem::path &input_csv = path_it->second;
-
-      // Load the CSV
-      CsvFrame frame;
-      if (!CsvIO::read_time_series_csv(input_csv, &frame, error_msg)) {
-        return Result<Dataset>{
-            std::nullopt, Status::Error("Failed to read CSV for ticker " +
-                                        window_row.ticker + ": " + error_msg)};
-      }
-
-      // Cache it
-      csv_cache[window_row.ticker] = std::move(frame);
-      frame_ptr = &csv_cache[window_row.ticker];
-    } else {
-      frame_ptr = &cache_it->second;
-    }
-
-    const CsvFrame &frame = *frame_ptr;
-
-    // Validate we have enough rows
-    if (window_row.window_end < 0) {
-      return Result<Dataset>{std::nullopt,
-                             Status::Error("Window end index is negative")};
-    }
-    if (static_cast<std::uint64_t>(window_row.window_end) >=
-        static_cast<std::uint64_t>(std::numeric_limits<std::size_t>::max())) {
-      return Result<Dataset>{
-          std::nullopt,
-          Status::Error("Window end index exceeds supported range")};
-    }
-    if (frame.features.empty()) {
-      return Result<Dataset>{
-          std::nullopt, Status::Error("CSV frame is missing feature columns")};
-    }
-
-    const auto required_rows =
-        static_cast<std::size_t>(window_row.window_end) + 1;
-    if (frame.features[0].size() < required_rows) {
-      return Result<Dataset>{
-          std::nullopt,
-          Status::Error("Not enough rows in CSV for window [" +
-                        std::to_string(window_row.window_start) + ", " +
-                        std::to_string(window_row.window_end) + "]")};
-    }
-
-    const auto *scaler_params = fetch_scalers_for_ticker(window_row.ticker);
-    if (!scaler_params) {
-      return Result<Dataset>{std::nullopt, Status::Error(scaler_error)};
-    }
-
-    // Fill X tensor: extract window_start to window_end
-    for (std::int64_t s = 0; s < seq_len_i64; ++s) {
-      std::int64_t row_idx = window_row.window_start + s;
-
-      if (row_idx < 0) {
-        return Result<Dataset>{std::nullopt,
-                               Status::Error("Window row index is negative")};
-      }
-      if (static_cast<std::uint64_t>(row_idx) >
-          static_cast<std::uint64_t>(std::numeric_limits<std::size_t>::max())) {
-        return Result<Dataset>{
-            std::nullopt,
-            Status::Error("Window row index exceeds supported range")};
-      }
-      const auto row_idx_usize = static_cast<std::size_t>(row_idx);
-
-      for (std::size_t f = 0; f < n_features; ++f) {
-        // Find the feature column index in the CSV
-        const std::string &feature_name = manifest_content.feature_columns[f];
-        auto it = std::find(frame.feature_names.begin(),
-                            frame.feature_names.end(), feature_name);
-
-        if (it == frame.feature_names.end()) {
-          return Result<Dataset>{
-              std::nullopt, Status::Error("Feature column not found in CSV: " +
-                                          feature_name)};
+        for (std::size_t f = 0; f < n_features; ++f) {
+          const std::size_t csv_col =
+              idx_map.at(manifest_content.feature_columns[f]);
+          double value = frame.features[csv_col][row_idx];
+          double scaled = apply_scaler_value(value, scaler_params[f]);
+          dataset.X.at(w_i64, s, static_cast<std::int64_t>(f)) =
+              static_cast<float>(scaled);
         }
+      }
 
-        const auto csv_col_idx = static_cast<std::size_t>(
-            std::distance(frame.feature_names.begin(), it));
-        if (row_idx_usize >= frame.features[csv_col_idx].size()) {
-          return Result<Dataset>{
-              std::nullopt,
-              Status::Error("Row index out of bounds for feature column: " +
-                            feature_name)};
+      // Fill Y tensor
+      if (has_target && window_row.target_start.has_value()) {
+        const std::size_t tcol =
+            idx_map.at(*manifest_content.target_column);
+        const std::int64_t tstart = *window_row.target_start;
+
+        for (std::int64_t h = 0; h < future_horizon_i64; ++h) {
+          const auto trow = static_cast<std::size_t>(tstart + h);
+          double value = frame.features[tcol][trow];
+          dataset.Y.at(w_i64, h, 0) = static_cast<float>(value);
         }
-        double value = frame.features[csv_col_idx][row_idx_usize];
-        double scaled_value = apply_scaler_value(value, (*scaler_params)[f]);
-        dataset.X.at(w_i64, s, static_cast<std::int64_t>(f)) =
-            static_cast<float>(scaled_value);
       }
-    }
-
-    // Fill Y tensor if we have targets
-    if (has_target && window_row.target_start.has_value()) {
-      const std::string &target_col = *manifest_content.target_column;
-
-      auto it = std::find(frame.feature_names.begin(),
-                          frame.feature_names.end(), target_col);
-
-      if (it == frame.feature_names.end()) {
-        return Result<Dataset>{
-            std::nullopt,
-            Status::Error("Target column not found in CSV: " + target_col)};
-      }
-
-      const auto target_col_idx = static_cast<std::size_t>(
-          std::distance(frame.feature_names.begin(), it));
-
-      const std::int64_t target_start = *window_row.target_start;
-      if (target_start < 0) {
-        return Result<Dataset>{std::nullopt,
-                               Status::Error("Target start index is negative")};
-      }
-      if (static_cast<std::uint64_t>(target_start) >
-          static_cast<std::uint64_t>(std::numeric_limits<std::size_t>::max())) {
-        return Result<Dataset>{
-            std::nullopt,
-            Status::Error("Target start index exceeds supported range")};
-      }
-
-      for (std::int64_t h = 0; h < future_horizon_i64; ++h) {
-        std::int64_t target_row = target_start + h;
-
-        if (target_row < 0) {
-          return Result<Dataset>{std::nullopt,
-                                 Status::Error("Target row is negative")};
-        }
-        if (static_cast<std::uint64_t>(target_row) >
-            static_cast<std::uint64_t>(
-                std::numeric_limits<std::size_t>::max())) {
-          return Result<Dataset>{
-              std::nullopt,
-              Status::Error("Target row exceeds supported range")};
-        }
-        const auto target_row_idx = static_cast<std::size_t>(target_row);
-
-        if (target_row_idx >= frame.features[target_col_idx].size()) {
-          return Result<Dataset>{std::nullopt,
-                                 Status::Error("Target row out of bounds: " +
-                                               std::to_string(target_row))};
-        }
-
-        double value = frame.features[target_col_idx][target_row_idx];
-        dataset.Y.at(w_i64, h, 0) = static_cast<float>(value);
-      }
-    }
+    });
   }
 
   return Result<Dataset>{std::move(dataset), Status::OK()};
 }
 
 Result<Dataset> get_dataset(const std::filesystem::path &manifest_path,
-                            double percentage) {
-  // Load manifest from file
+                            double percentage,
+                            unsigned int thread_count) {
   auto manifest_result = Manifest::read_from_file(manifest_path);
 
   if (!manifest_result) {
     return Result<Dataset>{std::nullopt, manifest_result.status};
   }
 
-  // Delegate to the in-memory version
-  return get_dataset(manifest_result.value->content(), percentage);
+  return get_dataset(manifest_result.value->content(), percentage, thread_count);
 }
 
 Result<FittedScaler> get_feature_scaler(const ManifestContent &manifest_content,
