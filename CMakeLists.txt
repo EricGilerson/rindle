@@ -108,8 +108,16 @@ if(RINDLE_BUILD_TESTS)
 
     add_executable(rindle_tests
             tests/engine_basic_tests.cpp
+            tests/scaler_tests.cpp
+            tests/types_tests.cpp
+            tests/thread_pool_tests.cpp
+            tests/integration_tests.cpp
     )
     target_link_libraries(rindle_tests PRIVATE rindle Catch2::Catch2WithMain)
+    target_include_directories(rindle_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_compile_definitions(rindle_tests PRIVATE
+            RINDLE_TEST_DATA_DIR=${CMAKE_CURRENT_SOURCE_DIR}/data
+    )
     include(CTest)
     include(Catch)
     catch_discover_tests(rindle_tests)
