@@ -12,7 +12,6 @@
 #include <mutex>
 #include <queue>
 #include <stdexcept>
-#include <stop_token>
 #include <thread>
 #include <type_traits>
 #include <vector>
@@ -29,7 +28,7 @@ public:
         }
         workers_.reserve(num_threads);
         for (std::size_t i = 0; i < num_threads; ++i) {
-            workers_.emplace_back([this](std::stop_token st) { worker_loop(st); });
+            workers_.emplace_back([this] { worker_loop(); });
         }
     }
 
@@ -39,7 +38,9 @@ public:
             stop_.store(true, std::memory_order_relaxed);
         }
         cv_.notify_all();
-        for (auto& w : workers_) w.request_stop();
+        for (auto& w : workers_) {
+            if (w.joinable()) w.join();
+        }
     }
 
     ThreadPool(const ThreadPool&) = delete;
@@ -89,8 +90,8 @@ public:
     std::size_t size() const { return workers_.size(); }
 
 private:
-    void worker_loop(std::stop_token st) {
-        while (!st.stop_requested()) {
+    void worker_loop() {
+        while (true) {
             std::function<void()> task;
             {
                 std::unique_lock lock(mutex_);
@@ -105,7 +106,7 @@ private:
         }
     }
 
-    std::vector<std::jthread> workers_;
+    std::vector<std::thread> workers_;
     std::queue<std::function<void()>> tasks_;
     std::mutex mutex_;
     std::condition_variable cv_;
